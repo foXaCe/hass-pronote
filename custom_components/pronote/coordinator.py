@@ -81,8 +81,8 @@ def get_punishments(period):
 def get_evaluations(period):
     try:
         evaluations = period.evaluations
-        evaluations = sorted(evaluations, key=lambda evaluation: (evaluation.name))
-        return sorted(evaluations, key=lambda evaluation: (evaluation.date), reverse=True)
+        evaluations = sorted(evaluations, key=lambda evaluation: evaluation.name)
+        return sorted(evaluations, key=lambda evaluation: evaluation.date, reverse=True)
     except Exception as ex:
         _LOGGER.info("Error getting evaluations from period (%s): %s", period.name, ex)
         return None
