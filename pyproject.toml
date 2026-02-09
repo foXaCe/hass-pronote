@@ -23,7 +23,13 @@ select = [
 ]
 ignore = [
     "E501",   # line too long (handled by formatter)
+    "F403",   # star imports used by design
+    "F405",   # names from star imports
 ]
+
+[tool.ruff.lint.per-file-ignores]
+"custom_components/pronote/config_flow.py" = ["E402"]
+"custom_components/pronote/pronote_helper.py" = ["E402"]
 
 [tool.ruff.lint.isort]
 known-first-party = ["custom_components.pronote"]

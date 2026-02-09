@@ -8,7 +8,7 @@
 
 OR
 
-If you can't find the integration, add this repository to HACS, then:  
+If you can't find the integration, add this repository to HACS, then:
 HACS > Integrations > **Pronote**
 
 ### Manual install
@@ -17,27 +17,27 @@ Copy the `pronote` folder from latest release to the `custom_components` folder 
 
 ## Configuration
 
-Click on the following button:  
-[![Open your Home Assistant instance and start setting up a new integration of a specific brand.](https://my.home-assistant.io/badges/brand.svg)](https://my.home-assistant.io/redirect/brand/?brand=pronote)  
+Click on the following button:
+[![Open your Home Assistant instance and start setting up a new integration of a specific brand.](https://my.home-assistant.io/badges/brand.svg)](https://my.home-assistant.io/redirect/brand/?brand=pronote)
 
-Or go to :  
+Or go to :
 Settings > Devices & Sevices > Integrations > Add Integration, and search for "Pronote"
 
-You can choose between two options when adding a config entry.  
+You can choose between two options when adding a config entry.
 
 ### Option 1: using username and password
 
-Use your Pronote URL with username, password and ENT (optional):  
+Use your Pronote URL with username, password and ENT (optional):
 ![Pronote config flow](doc/config_flow_username_password.png)
 
 ### Option 2: using the QR Code
 
-Install the following Chrome Extension: [QR Code Reader](https://chrome.google.com/webstore/detail/qr-code-reader/likadllkkidlligfcdhfnnbkjigdkmci) (only needed for setup).  
+Install the following Chrome Extension: [QR Code Reader](https://chrome.google.com/webstore/detail/qr-code-reader/likadllkkidlligfcdhfnnbkjigdkmci) (only needed for setup).
 
-Create the QR Code from your Pronote account:  
+Create the QR Code from your Pronote account:
 ![image](doc/generate_qr_code.png)
 
-Use the extension to scan the QR Code:  
+Use the extension to scan the QR Code:
 ![image](doc/scan_qr_code.png)
 
 And copy the JSON ouput that looks like:
@@ -45,12 +45,12 @@ And copy the JSON ouput that looks like:
 {"jeton":"XXXXXXXXXXX[...]XXXXXXXXXXXXXX","login":"YYYYYYYYYYYYYY","url":"https://[id of your school].index-education.net/pronote/..."}
 ```
 
-Paste it, and enter the PIN code used for the generation:  
+Paste it, and enter the PIN code used for the generation:
 ![image](doc/config_flow_qr_code.png)
 
 ### Parent account
 
-If using a Parent account, you'll have to select the child you want to add:  
+If using a Parent account, you'll have to select the child you want to add:
 ![image](doc/config_flow_parent.png)
 
 ## Usage

@@ -2,17 +2,15 @@
 
 from __future__ import annotations
 
+import logging
+from datetime import timedelta
+
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ConfigEntryNotReady
 
-from datetime import timedelta
-
-import logging
-
+from .const import DEFAULT_REFRESH_INTERVAL, DOMAIN, PLATFORMS
 from .coordinator import PronoteDataUpdateCoordinator
-
-from .const import DOMAIN, PLATFORMS, DEFAULT_REFRESH_INTERVAL
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -22,7 +20,6 @@ async def async_migrate_entry(hass, config_entry: ConfigEntry) -> bool:
     _LOGGER.debug("Migrating from version %s", config_entry.version)
 
     if config_entry.version == 1:
-
         new = {**config_entry.data}
         new["connection_type"] = "username_password"
 

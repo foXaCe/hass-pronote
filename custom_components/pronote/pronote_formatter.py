@@ -1,7 +1,7 @@
 """Data Formatter for the Pronote integration."""
 
 import logging
-from datetime import datetime
+
 from slugify import slugify
 
 from .const import (
@@ -161,9 +161,7 @@ def format_punishment(punishment) -> dict:
         "exclusion": punishment.exclusion,
         "during_lesson": punishment.during_lesson,
         "homework_documents": format_attachment_list(punishment.homework_documents),
-        "circumstance_documents": format_attachment_list(
-            punishment.circumstance_documents
-        ),
+        "circumstance_documents": format_attachment_list(punishment.circumstance_documents),
         "giver": punishment.giver,
         "schedule": [
             {

@@ -1,9 +1,10 @@
 """Client wrapper for the Pronote integration."""
 
 ### Hotfix for python 3.13 https://github.com/bain3/pronotepy/pull/317#issuecomment-2523257656
-import autoslot
-from itertools import tee
 import dis
+from itertools import tee
+
+import autoslot
 
 
 def assignments_to_self(method) -> set:
@@ -12,10 +13,10 @@ def assignments_to_self(method) -> set:
     i0, i1 = tee(instructions)
     next(i1, None)
     names = set()
-    for a, b in zip(i0, i1):
-        accessing_self = (
-            a.opname in ("LOAD_FAST", "LOAD_DEREF") and a.argval == instance_var
-        ) or (a.opname == "LOAD_FAST_LOAD_FAST" and a.argval[1] == instance_var)
+    for a, b in zip(i0, i1, strict=False):
+        accessing_self = (a.opname in ("LOAD_FAST", "LOAD_DEREF") and a.argval == instance_var) or (
+            a.opname == "LOAD_FAST_LOAD_FAST" and a.argval[1] == instance_var
+        )
         storing_attribute = b.opname == "STORE_ATTR"
         if accessing_self and storing_attribute:
             names.add(b.argval)
@@ -25,10 +26,11 @@ def assignments_to_self(method) -> set:
 autoslot.assignments_to_self = assignments_to_self
 ### End Hotfix
 
-import pronotepy
 import json
 import logging
 import re
+
+import pronotepy
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -70,11 +72,7 @@ def get_client_from_username_password(
         url += "?login=true"
 
     try:
-        client = (
-            pronotepy.ParentClient
-            if data["account_type"] == "parent"
-            else pronotepy.Client
-        )(
+        client = (pronotepy.ParentClient if data["account_type"] == "parent" else pronotepy.Client)(
             pronote_url=url,
             username=data["username"],
             password=data["password"],
@@ -94,20 +92,14 @@ def get_client_from_username_password(
 
 
 def get_client_from_qr_code(data) -> pronotepy.Client | pronotepy.ParentClient | None:
-
     if "qr_code_json" in data:  # first login from QR Code JSON
-
         # login with qrcode json
         qr_code_json = json.loads(data["qr_code_json"])
         qr_code_pin = data["qr_code_pin"]
         uuid = data["qr_code_uuid"]
 
         # get the initial client using qr_code
-        client = (
-            pronotepy.ParentClient
-            if data["account_type"] == "parent"
-            else pronotepy.Client
-        ).qrcode_login(
+        client = (pronotepy.ParentClient if data["account_type"] == "parent" else pronotepy.Client).qrcode_login(
             qr_code=qr_code_json,
             pin=qr_code_pin,
             uuid=uuid,
@@ -135,9 +127,7 @@ def get_client_from_qr_code(data) -> pronotepy.Client | pronotepy.ParentClient |
     _LOGGER.info(f"Coordinator uses qr_code_username: {qr_code_username}")
     _LOGGER.info(f"Coordinator uses qr_code_pwd: {qr_code_password}")
 
-    return (
-        pronotepy.ParentClient if data["account_type"] == "parent" else pronotepy.Client
-    ).token_login(
+    return (pronotepy.ParentClient if data["account_type"] == "parent" else pronotepy.Client).token_login(
         pronote_url=qr_code_url,
         username=qr_code_username,
         password=qr_code_password,

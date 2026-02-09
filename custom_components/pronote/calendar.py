@@ -1,17 +1,16 @@
 from datetime import datetime
-from homeassistant.core import HomeAssistant, callback
-from homeassistant.config_entries import ConfigEntry
-from homeassistant.helpers.entity_platform import AddEntitiesCallback
-from homeassistant.helpers.device_registry import DeviceEntryType, DeviceInfo
-from homeassistant.components.calendar import CalendarEntity, CalendarEvent
-from homeassistant.util.dt import get_time_zone
 from zoneinfo import ZoneInfo
 
+from homeassistant.components.calendar import CalendarEntity, CalendarEvent
+from homeassistant.config_entries import ConfigEntry
+from homeassistant.core import HomeAssistant, callback
+from homeassistant.helpers.device_registry import DeviceInfo
+from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
-from .coordinator import PronoteDataUpdateCoordinator
-from .pronote_formatter import format_displayed_lesson
 
 from .const import DOMAIN
+from .coordinator import PronoteDataUpdateCoordinator
+from .pronote_formatter import format_displayed_lesson
 
 
 async def async_setup_entry(
@@ -20,9 +19,7 @@ async def async_setup_entry(
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     """Set up ReCollect Waste sensors based on a config entry."""
-    coordinator: PronoteDataUpdateCoordinator = hass.data[DOMAIN][
-        config_entry.entry_id
-    ]["coordinator"]
+    coordinator: PronoteDataUpdateCoordinator = hass.data[DOMAIN][config_entry.entry_id]["coordinator"]
 
     await coordinator.async_config_entry_first_refresh()
 
@@ -48,7 +45,6 @@ def async_get_calendar_event_from_lessons(lesson, timezone) -> CalendarEvent:
 
 
 class PronoteCalendar(CoordinatorEntity, CalendarEntity):
-
     def __init__(
         self,
         coordinator: PronoteDataUpdateCoordinator,
@@ -89,15 +85,11 @@ class PronoteCalendar(CoordinatorEntity, CalendarEntity):
                 return None
 
             now = datetime.now()
-            current_event = next(
-                event for event in lessons if event.start >= now and now < event.end
-            )
+            current_event = next(event for event in lessons if event.start >= now and now < event.end)
         except StopIteration:
             self._event = None
         else:
-            self._event = async_get_calendar_event_from_lessons(
-                current_event, self.hass.config.time_zone
-            )
+            self._event = async_get_calendar_event_from_lessons(current_event, self.hass.config.time_zone)
 
         super()._handle_coordinator_update()
 
@@ -111,7 +103,7 @@ class PronoteCalendar(CoordinatorEntity, CalendarEntity):
         return [
             async_get_calendar_event_from_lessons(event, hass.config.time_zone)
             for event in filter(
-                lambda lesson: lesson.canceled == False,
+                lambda lesson: not lesson.canceled,
                 self.coordinator.data["lessons_period"],
             )
         ]

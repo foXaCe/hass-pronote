@@ -2,23 +2,19 @@
 
 from __future__ import annotations
 
+import dis
 import logging
-from typing import Any
 import uuid
-
-import voluptuous as vol
-
-from datetime import time
-
-from homeassistant import config_entries
-from homeassistant.data_entry_flow import FlowResult
-from homeassistant.exceptions import HomeAssistantError
-from homeassistant.core import callback
+from itertools import tee
+from typing import Any
 
 ### Hotfix for python 3.13 https://github.com/bain3/pronotepy/pull/317#issuecomment-2523257656
 import autoslot
-from itertools import tee
-import dis
+import voluptuous as vol
+from homeassistant import config_entries
+from homeassistant.core import callback
+from homeassistant.data_entry_flow import FlowResult
+from homeassistant.exceptions import HomeAssistantError
 
 
 def assignments_to_self(method) -> set:
@@ -27,10 +23,10 @@ def assignments_to_self(method) -> set:
     i0, i1 = tee(instructions)
     next(i1, None)
     names = set()
-    for a, b in zip(i0, i1):
-        accessing_self = (
-            a.opname in ("LOAD_FAST", "LOAD_DEREF") and a.argval == instance_var
-        ) or (a.opname == "LOAD_FAST_LOAD_FAST" and a.argval[1] == instance_var)
+    for a, b in zip(i0, i1, strict=False):
+        accessing_self = (a.opname in ("LOAD_FAST", "LOAD_DEREF") and a.argval == instance_var) or (
+            a.opname == "LOAD_FAST_LOAD_FAST" and a.argval[1] == instance_var
+        )
         storing_attribute = b.opname == "STORE_ATTR"
         if accessing_self and storing_attribute:
             names.add(b.argval)
@@ -41,17 +37,15 @@ autoslot.assignments_to_self = assignments_to_self
 ### End Hotfix
 
 import pronotepy
-from .pronote_helper import *
-
 from pronotepy.ent import *
 
 from .const import (
-    DOMAIN,
-    DEFAULT_REFRESH_INTERVAL,
     DEFAULT_ALARM_OFFSET,
     DEFAULT_LUNCH_BREAK_TIME,
+    DEFAULT_REFRESH_INTERVAL,
+    DOMAIN,
 )
-
+from .pronote_helper import *
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -68,9 +62,7 @@ def get_ent_list() -> dict[str]:
 
 STEP_USER_CONNECTION_TYPE = vol.Schema(
     {
-        vol.Required("connection_type"): vol.In(
-            {"username_password": "Username and password", "qrcode": "QRCode"}
-        ),
+        vol.Required("connection_type"): vol.In({"username_password": "Username and password", "qrcode": "QRCode"}),
         vol.Required("account_type"): vol.In({"eleve": "Student", "parent": "Parent"}),
     }
 )
@@ -113,9 +105,7 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         if user_input is None:
             _LOGGER.info("Selecting connection")
 
-            return self.async_show_form(
-                step_id="user", data_schema=STEP_USER_CONNECTION_TYPE
-            )
+            return self.async_show_form(step_id="user", data_schema=STEP_USER_CONNECTION_TYPE)
         _LOGGER.info("Selected connection: %s", user_input)
         self._user_inputs.update(user_input)
 
@@ -124,9 +114,7 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         else:
             return await self.async_step_qr_code_login()
 
-    async def async_step_username_password_login(
-        self, user_input: dict | None = None
-    ) -> FlowResult:
+    async def async_step_username_password_login(self, user_input: dict | None = None) -> FlowResult:
         """Handle the rest step."""
         _LOGGER.info("async_step_up: Connecting via user/password")
         errors: dict[str, str] = {}
@@ -135,9 +123,7 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 _LOGGER.debug("User Input: %s", user_input)
                 user_input["account_type"] = self._user_inputs["account_type"]
                 self._user_inputs.update(user_input)
-                client = await self.hass.async_add_executor_job(
-                    get_client_from_username_password, self._user_inputs
-                )
+                client = await self.hass.async_add_executor_job(get_client_from_username_password, self._user_inputs)
 
                 if client is None:
                     raise InvalidAuth
@@ -160,9 +146,7 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             errors=errors,
         )
 
-    async def async_step_qr_code_login(
-        self, user_input: dict | None = None
-    ) -> FlowResult:
+    async def async_step_qr_code_login(self, user_input: dict | None = None) -> FlowResult:
         """Handle the rest step."""
         _LOGGER.info("async_step_up: Connecting via qrcode")
         errors: dict[str, str] = {}
@@ -172,9 +156,7 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 user_input["account_type"] = self._user_inputs["account_type"]
                 user_input["qr_code_uuid"] = str(uuid.uuid4())
 
-                client = await self.hass.async_add_executor_job(
-                    get_client_from_qr_code, user_input
-                )
+                client = await self.hass.async_add_executor_job(get_client_from_qr_code, user_input)
 
                 if client is None:
                     raise InvalidAuth
@@ -193,9 +175,7 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
                 return await self.async_step_nickname()
 
-        return self.async_show_form(
-            step_id="qr_code_login", data_schema=STEP_USER_DATA_SCHEMA_QR, errors=errors
-        )
+        return self.async_show_form(step_id="qr_code_login", data_schema=STEP_USER_DATA_SCHEMA_QR, errors=errors)
 
     async def async_step_parent(self, user_input=None) -> FlowResult:
         errors: dict[str, str] = {}
@@ -276,9 +256,7 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
         """Initialize options flow."""
         self.config_entry_id = config_entry_id
 
-    async def async_step_init(
-        self, user_input: dict[str, Any] | None = None
-    ) -> FlowResult:
+    async def async_step_init(self, user_input: dict[str, Any] | None = None) -> FlowResult:
         """Manage the options."""
         if user_input is not None:
             return self.async_create_entry(title="", data=user_input)
@@ -289,26 +267,20 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
             step_id="init",
             data_schema=vol.Schema(
                 {
-                    vol.Optional(
-                        "nickname", default=config_entry.options.get("nickname")
-                    ): vol.All(vol.Coerce(str), vol.Length(min=0)),
+                    vol.Optional("nickname", default=config_entry.options.get("nickname")): vol.All(
+                        vol.Coerce(str), vol.Length(min=0)
+                    ),
                     vol.Optional(
                         "refresh_interval",
-                        default=config_entry.options.get(
-                            "refresh_interval", DEFAULT_REFRESH_INTERVAL
-                        ),
+                        default=config_entry.options.get("refresh_interval", DEFAULT_REFRESH_INTERVAL),
                     ): int,
                     vol.Optional(
                         "lunch_break_time",
-                        default=config_entry.options.get(
-                            "lunch_break_time", DEFAULT_LUNCH_BREAK_TIME
-                        ),
+                        default=config_entry.options.get("lunch_break_time", DEFAULT_LUNCH_BREAK_TIME),
                     ): str,
                     vol.Optional(
                         "alarm_offset",
-                        default=config_entry.options.get(
-                            "alarm_offset", DEFAULT_ALARM_OFFSET
-                        ),
+                        default=config_entry.options.get("alarm_offset", DEFAULT_ALARM_OFFSET),
                     ): int,
                 }
             ),
