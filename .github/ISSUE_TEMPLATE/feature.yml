@@ -1,0 +1,32 @@
+name: Feature Request
+description: Proposer une nouvelle fonctionnalité
+labels: [enhancement]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Merci de proposer cette amélioration !
+  - type: textarea
+    id: description
+    attributes:
+      label: Description de la fonctionnalité
+      description: Description claire et concise de ce que vous souhaitez.
+    validations:
+      required: true
+  - type: textarea
+    id: motivation
+    attributes:
+      label: Motivation
+      description: Pourquoi cette fonctionnalité serait utile ?
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives envisagées
+      description: Avez-vous envisagé d'autres solutions ?
+  - type: textarea
+    id: additional
+    attributes:
+      label: Informations supplémentaires
+      description: Tout autre contexte utile (captures d'écran, liens, etc.).

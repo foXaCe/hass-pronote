@@ -1,0 +1,58 @@
+name: Bug Report
+description: Signaler un bug dans l'intégration Pronote
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Merci de prendre le temps de signaler ce bug.
+  - type: textarea
+    id: description
+    attributes:
+      label: Description du bug
+      description: Description claire et concise du bug.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Etapes pour reproduire
+      description: Comment reproduire le comportement.
+      value: |
+        1. ...
+        2. ...
+        3. ...
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Comportement attendu
+      description: Ce que vous attendiez comme comportement.
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Version de l'intégration
+      placeholder: "ex: 0.15.5"
+    validations:
+      required: true
+  - type: input
+    id: ha_version
+    attributes:
+      label: Version de Home Assistant
+      placeholder: "ex: 2025.1.0"
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs
+      description: Logs pertinents (Home Assistant -> Paramètres -> Système -> Journaux).
+      render: text
+  - type: textarea
+    id: additional
+    attributes:
+      label: Informations supplémentaires
+      description: Tout autre contexte utile.
