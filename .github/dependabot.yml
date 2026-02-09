@@ -16,3 +16,7 @@ updates:
       - dependencies
     commit-message:
       prefix: "chore"
+    allow:
+      - dependency-name: pytest-homeassistant-custom-component
+      - dependency-name: pronotepy
+      - dependency-name: python-slugify
