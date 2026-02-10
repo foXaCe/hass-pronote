@@ -2,31 +2,44 @@
   "config": {
     "step": {
       "user": {
-        "data": {
-          "account_type": "Account type",
-          "connection_type": "Authentication"
+        "menu_options": {
+          "username_password_login": "Login with username and password",
+          "qr_code_login": "Login with QR Code"
         }
       },
       "username_password_login": {
-          "data": {
-            "url": "[%key:common::config_flow::data::url%]",
-            "username": "[%key:common::config_flow::data::username%]",
-            "password": "[%key:common::config_flow::data::password%]",
-            "device_name": "[%key:common::config_flow::data::device_name%]",
-            "account_pin": "[%key:common::config_flow::data::account_pin%]",
-            "ent": "Ent"
+        "data": {
+          "account_type": "Account type",
+          "url": "[%key:common::config_flow::data::url%]",
+          "username": "[%key:common::config_flow::data::username%]",
+          "password": "[%key:common::config_flow::data::password%]",
+          "ent": "ENT"
         }
       },
       "qr_code_login": {
         "data": {
-          "qr_code_json": "JSON version of QR",
-          "qr_code_pin": "Pin code"
+          "account_type": "Account type",
+          "qr_code_json": "JSON version of QR Code",
+          "qr_code_pin": "PIN code"
         },
         "description": "JSON of QR Code"
       },
       "parent": {
         "data": {
           "child": "Child"
+        }
+      },
+      "nickname": {
+        "data": {
+          "nickname": "Nickname"
+        }
+      },
+      "reauth_confirm": {
+        "description": "Your Pronote credentials have expired. Please re-enter them.",
+        "data": {
+          "password": "[%key:common::config_flow::data::password%]",
+          "qr_code_json": "JSON version of QR Code",
+          "qr_code_pin": "PIN code"
         }
       }
     },
@@ -36,7 +49,52 @@
       "unknown": "[%key:common::config_flow::error::unknown%]"
     },
     "abort": {
-      "already_configured": "[%key:common::config_flow::abort::already_configured_device%]"
+      "already_configured": "[%key:common::config_flow::abort::already_configured_device%]",
+      "reauth_successful": "[%key:common::config_flow::abort::reauth_successful%]"
+    }
+  },
+  "selector": {
+    "account_type": {
+      "options": {
+        "eleve": "Student",
+        "parent": "Parent"
+      }
+    }
+  },
+  "entity": {
+    "sensor": {
+      "child_class": { "name": "Class" },
+      "timetable_today": { "name": "Today's timetable" },
+      "timetable_tomorrow": { "name": "Tomorrow's timetable" },
+      "timetable_next_day": { "name": "Next day's timetable" },
+      "timetable_period": { "name": "Period's timetable" },
+      "homework": { "name": "Homework" },
+      "homework_period": { "name": "Period's homework" },
+      "grades": { "name": "Grades" },
+      "grades_period": { "name": "Grades {period}" },
+      "absences": { "name": "Absences" },
+      "absences_period": { "name": "Absences {period}" },
+      "delays": { "name": "Delays" },
+      "delays_period": { "name": "Delays {period}" },
+      "evaluations": { "name": "Evaluations" },
+      "evaluations_period": { "name": "Evaluations {period}" },
+      "averages": { "name": "Averages" },
+      "averages_period": { "name": "Averages {period}" },
+      "punishments": { "name": "Punishments" },
+      "punishments_period": { "name": "Punishments {period}" },
+      "overall_average": { "name": "Overall average" },
+      "overall_average_period": { "name": "Overall average {period}" },
+      "information_and_surveys": { "name": "Information and surveys" },
+      "ical_url": { "name": "Timetable iCal URL" },
+      "next_alarm": { "name": "Next alarm" },
+      "menus": { "name": "Menus" },
+      "current_period": { "name": "Current period" },
+      "periods": { "name": "Periods" },
+      "previous_periods": { "name": "Previous periods" },
+      "active_periods": { "name": "Active periods" }
+    },
+    "calendar": {
+      "timetable": { "name": "Timetable of {child}" }
     }
   },
   "options": {

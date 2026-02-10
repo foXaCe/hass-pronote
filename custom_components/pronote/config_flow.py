@@ -2,42 +2,18 @@
 
 from __future__ import annotations
 
-import dis
 import logging
 import uuid
-from itertools import tee
 from typing import Any
 
-### Hotfix for python 3.13 https://github.com/bain3/pronotepy/pull/317#issuecomment-2523257656
-import autoslot
+import pronotepy
 import voluptuous as vol
 from homeassistant import config_entries
 from homeassistant.core import callback
 from homeassistant.data_entry_flow import FlowResult
 from homeassistant.exceptions import HomeAssistantError
-
-
-def assignments_to_self(method) -> set:
-    instance_var = next(iter(method.__code__.co_varnames), "self")
-    instructions = dis.Bytecode(method)
-    i0, i1 = tee(instructions)
-    next(i1, None)
-    names = set()
-    for a, b in zip(i0, i1, strict=False):
-        accessing_self = (a.opname in ("LOAD_FAST", "LOAD_DEREF") and a.argval == instance_var) or (
-            a.opname == "LOAD_FAST_LOAD_FAST" and a.argval[1] == instance_var
-        )
-        storing_attribute = b.opname == "STORE_ATTR"
-        if accessing_self and storing_attribute:
-            names.add(b.argval)
-    return names
-
-
-autoslot.assignments_to_self = assignments_to_self
-### End Hotfix
-
-import pronotepy
-from pronotepy.ent import *
+from homeassistant.helpers.selector import SelectSelector, SelectSelectorConfig
+from pronotepy.ent import *  # noqa: F403
 
 from .const import (
     DEFAULT_ALARM_OFFSET,
@@ -45,12 +21,12 @@ from .const import (
     DEFAULT_REFRESH_INTERVAL,
     DOMAIN,
 )
-from .pronote_helper import *
+from .pronote_helper import get_client_from_qr_code, get_client_from_username_password
 
 _LOGGER = logging.getLogger(__name__)
 
 
-def get_ent_list() -> dict[str]:
+def get_ent_list() -> list[str]:
     ent_functions = dir(pronotepy.ent)
     ent = []
     for func in ent_functions:
@@ -60,35 +36,32 @@ def get_ent_list() -> dict[str]:
     return ent
 
 
-STEP_USER_CONNECTION_TYPE = vol.Schema(
-    {
-        vol.Required("connection_type"): vol.In({"username_password": "Username and password", "qrcode": "QRCode"}),
-        vol.Required("account_type"): vol.In({"eleve": "Student", "parent": "Parent"}),
-    }
+ACCOUNT_TYPE_SELECTOR = SelectSelector(
+    SelectSelectorConfig(
+        options=["eleve", "parent"],
+        translation_key="account_type",
+    )
 )
 
 STEP_USER_DATA_SCHEMA_UP = vol.Schema(
     {
+        vol.Required("account_type"): ACCOUNT_TYPE_SELECTOR,
         vol.Required("url"): str,
         vol.Required("username"): str,
         vol.Required("password"): str,
         vol.Optional("ent"): vol.In(get_ent_list()),
-        vol.Optional("device_name"): str,
-        vol.Optional("account_pin"): str,
     }
 )
 
 STEP_USER_DATA_SCHEMA_QR = vol.Schema(
     {
+        vol.Required("account_type"): ACCOUNT_TYPE_SELECTOR,
         vol.Required("qr_code_json"): str,
         vol.Required("qr_code_pin"): str,
-        vol.Optional("device_name"): str,
-        vol.Optional("account_pin"): str,
     }
 )
 
 
-@config_entries.HANDLERS.register(DOMAIN)
 class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     """Handle a config flow for Pronote."""
 
@@ -102,27 +75,20 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         """Handle a flow initialized by the user."""
         _LOGGER.debug("Setup process initiated by user.")
 
-        if user_input is None:
-            _LOGGER.info("Selecting connection")
-
-            return self.async_show_form(step_id="user", data_schema=STEP_USER_CONNECTION_TYPE)
-        _LOGGER.info("Selected connection: %s", user_input)
-        self._user_inputs.update(user_input)
-
-        if user_input["connection_type"] == "username_password":
-            return await self.async_step_username_password_login()
-        else:
-            return await self.async_step_qr_code_login()
+        return self.async_show_menu(
+            step_id="user",
+            menu_options=["username_password_login", "qr_code_login"],
+        )
 
     async def async_step_username_password_login(self, user_input: dict | None = None) -> FlowResult:
-        """Handle the rest step."""
+        """Handle username/password login step."""
         _LOGGER.info("async_step_up: Connecting via user/password")
         errors: dict[str, str] = {}
         if user_input is not None:
             try:
                 _LOGGER.debug("User Input: %s", user_input)
-                user_input["account_type"] = self._user_inputs["account_type"]
                 self._user_inputs.update(user_input)
+                self._user_inputs["connection_type"] = "username_password"
                 client = await self.hass.async_add_executor_job(get_client_from_username_password, self._user_inputs)
 
                 if client is None:
@@ -134,7 +100,7 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             else:
                 self.pronote_client = client
 
-                if user_input["account_type"] == "parent":
+                if self._user_inputs["account_type"] == "parent":
                     _LOGGER.debug("_User Inputs UP Parent: %s", self._user_inputs)
                     return await self.async_step_parent()
 
@@ -147,16 +113,17 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         )
 
     async def async_step_qr_code_login(self, user_input: dict | None = None) -> FlowResult:
-        """Handle the rest step."""
+        """Handle QR code login step."""
         _LOGGER.info("async_step_up: Connecting via qrcode")
         errors: dict[str, str] = {}
         if user_input is not None:
             try:
-                _LOGGER.debug("User Input: %s", self._user_inputs)
-                user_input["account_type"] = self._user_inputs["account_type"]
-                user_input["qr_code_uuid"] = str(uuid.uuid4())
+                _LOGGER.debug("User Input: %s", user_input)
+                self._user_inputs.update(user_input)
+                self._user_inputs["connection_type"] = "qrcode"
+                self._user_inputs["qr_code_uuid"] = str(uuid.uuid4())
 
-                client = await self.hass.async_add_executor_job(get_client_from_qr_code, user_input)
+                client = await self.hass.async_add_executor_job(get_client_from_qr_code, self._user_inputs)
 
                 if client is None:
                     raise InvalidAuth
@@ -175,7 +142,11 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
                 return await self.async_step_nickname()
 
-        return self.async_show_form(step_id="qr_code_login", data_schema=STEP_USER_DATA_SCHEMA_QR, errors=errors)
+        return self.async_show_form(
+            step_id="qr_code_login",
+            data_schema=STEP_USER_DATA_SCHEMA_QR,
+            errors=errors,
+        )
 
     async def async_step_parent(self, user_input=None) -> FlowResult:
         errors: dict[str, str] = {}
@@ -195,7 +166,6 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 step_id="parent",
                 data_schema=STEP_PARENT_DATA_SCHEMA,
                 errors=errors,
-                description_placeholders={"title": "Enfant(s)"},
             )
 
         self._user_inputs["child"] = user_input["child"]
@@ -210,6 +180,9 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         if self._user_inputs.get("account_type") == "parent":
             child_name = self._user_inputs["child"]
             title = f"{child_name} (via compte parent)"
+
+        await self.async_set_unique_id(child_name)
+        self._abort_if_unique_id_configured()
 
         if user_input is not None:
             self._user_inputs.update(user_input)
@@ -232,6 +205,76 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         return self.async_show_form(
             step_id="nickname",
             data_schema=STEP_NICKNAME_SCHEMA,
+        )
+
+    async def async_step_reauth(self, entry_data: dict[str, Any]) -> FlowResult:
+        """Handle reauth when credentials expire."""
+        self._user_inputs = dict(entry_data)
+        return await self.async_step_reauth_confirm()
+
+    async def async_step_reauth_confirm(self, user_input: dict | None = None) -> FlowResult:
+        """Handle reauth confirmation."""
+        errors: dict[str, str] = {}
+
+        if user_input is not None:
+            connection_type = self._user_inputs.get("connection_type", "username_password")
+
+            if connection_type == "qrcode":
+                self._user_inputs["qr_code_json"] = user_input.get("qr_code_json", "")
+                self._user_inputs["qr_code_pin"] = user_input.get("qr_code_pin", "")
+                self._user_inputs["qr_code_uuid"] = str(uuid.uuid4())
+                try:
+                    client = await self.hass.async_add_executor_job(
+                        get_client_from_qr_code, self._user_inputs
+                    )
+                    if client is None:
+                        raise InvalidAuth
+                except (InvalidAuth, Exception):
+                    errors["base"] = "invalid_auth"
+                else:
+                    self._user_inputs["qr_code_url"] = client.pronote_url
+                    self._user_inputs["qr_code_username"] = client.username
+                    self._user_inputs["qr_code_password"] = client.password
+                    self._user_inputs["qr_code_uuid"] = client.uuid
+                    return self.async_update_reload_and_abort(
+                        self._get_reauth_entry(),
+                        data=self._user_inputs,
+                    )
+            else:
+                self._user_inputs["password"] = user_input["password"]
+                try:
+                    client = await self.hass.async_add_executor_job(
+                        get_client_from_username_password, self._user_inputs
+                    )
+                    if client is None:
+                        raise InvalidAuth
+                except (InvalidAuth, pronotepy.exceptions.CryptoError, Exception):
+                    errors["base"] = "invalid_auth"
+                else:
+                    return self.async_update_reload_and_abort(
+                        self._get_reauth_entry(),
+                        data=self._user_inputs,
+                    )
+
+        connection_type = self._user_inputs.get("connection_type", "username_password")
+        if connection_type == "qrcode":
+            schema = vol.Schema(
+                {
+                    vol.Required("qr_code_json"): str,
+                    vol.Required("qr_code_pin"): str,
+                }
+            )
+        else:
+            schema = vol.Schema(
+                {
+                    vol.Required("password"): str,
+                }
+            )
+
+        return self.async_show_form(
+            step_id="reauth_confirm",
+            data_schema=schema,
+            errors=errors,
         )
 
     @staticmethod

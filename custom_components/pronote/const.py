@@ -1,6 +1,15 @@
 """Constants for the Pronote integration."""
 
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
+
 from homeassistant.const import Platform
+
+if TYPE_CHECKING:
+    from homeassistant.config_entries import ConfigEntry
+
+    from .coordinator import PronoteDataUpdateCoordinator
 
 DOMAIN = "pronote"
 EVENT_TYPE = "pronote_event"
@@ -22,3 +31,5 @@ DEFAULT_ALARM_OFFSET = 60
 DEFAULT_LUNCH_BREAK_TIME = "13:00"
 
 PLATFORMS = [Platform.SENSOR, Platform.CALENDAR]
+
+type PronoteConfigEntry = ConfigEntry[PronoteDataUpdateCoordinator]

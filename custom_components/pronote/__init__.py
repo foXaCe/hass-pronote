@@ -5,17 +5,17 @@ from __future__ import annotations
 import logging
 from datetime import timedelta
 
-from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
-from homeassistant.exceptions import ConfigEntryNotReady
 
-from .const import DEFAULT_REFRESH_INTERVAL, DOMAIN, PLATFORMS
+import custom_components.pronote._compat  # noqa: F401  # Apply autoslot hotfix before pronotepy
+
+from .const import DEFAULT_REFRESH_INTERVAL, PLATFORMS, PronoteConfigEntry
 from .coordinator import PronoteDataUpdateCoordinator
 
 _LOGGER = logging.getLogger(__name__)
 
 
-async def async_migrate_entry(hass, config_entry: ConfigEntry) -> bool:
+async def async_migrate_entry(hass, config_entry) -> bool:
     """Migrate old entry."""
     _LOGGER.debug("Migrating from version %s", config_entry.version)
 
@@ -31,20 +31,13 @@ async def async_migrate_entry(hass, config_entry: ConfigEntry) -> bool:
     return True
 
 
-async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
+async def async_setup_entry(hass: HomeAssistant, entry: PronoteConfigEntry) -> bool:
     """Set up Pronote from a config entry."""
-    hass.data.setdefault(DOMAIN, {})
-
     coordinator = PronoteDataUpdateCoordinator(hass, entry)
 
     await coordinator.async_config_entry_first_refresh()
 
-    if not coordinator.last_update_success:
-        raise ConfigEntryNotReady
-
-    hass.data[DOMAIN][entry.entry_id] = {
-        "coordinator": coordinator,
-    }
+    entry.runtime_data = coordinator
 
     entry.async_on_unload(entry.add_update_listener(update_listener))
 
@@ -53,17 +46,14 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     return True
 
 
-async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
+async def async_unload_entry(hass: HomeAssistant, entry: PronoteConfigEntry) -> bool:
     """Unload a config entry."""
-    if unload_ok := await hass.config_entries.async_unload_platforms(entry, PLATFORMS):
-        hass.data[DOMAIN].pop(entry.entry_id)
-
-    return unload_ok
+    return await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
 
 
-async def update_listener(hass: HomeAssistant, entry: ConfigEntry):
+async def update_listener(hass: HomeAssistant, entry: PronoteConfigEntry):
     """Handle options update."""
-    hass.data[DOMAIN][entry.entry_id]["coordinator"].update_interval = timedelta(
+    entry.runtime_data.update_interval = timedelta(
         minutes=entry.options.get("refresh_interval", DEFAULT_REFRESH_INTERVAL)
     )
 

@@ -1,41 +1,112 @@
 {
     "config": {
-        "abort": {
-            "already_configured": "Equipamento já configurado"
+        "step": {
+            "user": {
+                "menu_options": {
+                    "username_password_login": "Entrar com utilizador e senha",
+                    "qr_code_login": "Entrar com QR Code"
+                }
+            },
+            "username_password_login": {
+                "data": {
+                    "account_type": "Tipo de conta",
+                    "url": "URL",
+                    "username": "Utilizador",
+                    "password": "Senha",
+                    "ent": "ENT"
+                }
+            },
+            "qr_code_login": {
+                "data": {
+                    "account_type": "Tipo de conta",
+                    "qr_code_json": "Versão JSON do QR Code",
+                    "qr_code_pin": "Código PIN"
+                },
+                "description": "JSON do QR Code"
+            },
+            "parent": {
+                "data": {
+                    "child": "Filho"
+                }
+            },
+            "nickname": {
+                "data": {
+                    "nickname": "Apelido"
+                }
+            },
+            "reauth_confirm": {
+                "description": "As suas credenciais Pronote expiraram. Por favor, insira-as novamente.",
+                "data": {
+                    "password": "Senha",
+                    "qr_code_json": "Versão JSON do QR Code",
+                    "qr_code_pin": "Código PIN"
+                }
+            }
         },
         "error": {
             "cannot_connect": "Falha na ligação",
             "invalid_auth": "Falha na autenticação",
             "unknown": "Erro inesperado"
         },
+        "abort": {
+            "already_configured": "Equipamento já configurado",
+            "reauth_successful": "Re-autenticação bem-sucedida"
+        }
+    },
+    "selector": {
+        "account_type": {
+            "options": {
+                "eleve": "Aluno",
+                "parent": "Pai/Mãe"
+            }
+        }
+    },
+    "entity": {
+        "sensor": {
+            "child_class": { "name": "Turma" },
+            "timetable_today": { "name": "Horário de hoje" },
+            "timetable_tomorrow": { "name": "Horário de amanhã" },
+            "timetable_next_day": { "name": "Horário do próximo dia" },
+            "timetable_period": { "name": "Horário do período" },
+            "homework": { "name": "Trabalhos de casa" },
+            "homework_period": { "name": "Trabalhos de casa do período" },
+            "grades": { "name": "Notas" },
+            "grades_period": { "name": "Notas {period}" },
+            "absences": { "name": "Faltas" },
+            "absences_period": { "name": "Faltas {period}" },
+            "delays": { "name": "Atrasos" },
+            "delays_period": { "name": "Atrasos {period}" },
+            "evaluations": { "name": "Avaliações" },
+            "evaluations_period": { "name": "Avaliações {period}" },
+            "averages": { "name": "Médias" },
+            "averages_period": { "name": "Médias {period}" },
+            "punishments": { "name": "Punições" },
+            "punishments_period": { "name": "Punições {period}" },
+            "overall_average": { "name": "Média geral" },
+            "overall_average_period": { "name": "Média geral {period}" },
+            "information_and_surveys": { "name": "Informações e inquéritos" },
+            "ical_url": { "name": "URL iCal do horário" },
+            "next_alarm": { "name": "Próximo alarme" },
+            "menus": { "name": "Menus" },
+            "current_period": { "name": "Período atual" },
+            "periods": { "name": "Períodos" },
+            "previous_periods": { "name": "Períodos anteriores" },
+            "active_periods": { "name": "Períodos ativos" }
+        },
+        "calendar": {
+            "timetable": { "name": "Horário de {child}" }
+        }
+    },
+    "options": {
         "step": {
-            "parent": {
+            "init": {
+                "description": "Personalize o funcionamento da integração",
                 "data": {
-                    "child": "Filho"
+                    "nickname": "Defina um apelido para o seu filho",
+                    "refresh_interval": "Intervalo de atualização dos dados (em minutos)",
+                    "lunch_break_time": "Hora limite para cálculo da pausa de almoço (HH:MM)",
+                    "alarm_offset": "Cálculo da hora do alarme (em minutos, antes da primeira aula do dia)"
                 }
-            },
-            "user": {
-                "data": {
-                    "connection_type": "Tipo de ...",
-                    "account_type": "Tipo de Conta"
-                }
-            },
-			"username_password_login": {
-                "data": {
-                    "ent": "ENT",
-                    "password": "Senha",
-                    "url": "URL",
-                    "username": "Utilizador",
-                    "device_name": "Nome do dispositivo",
-                    "account_pin": "PIN da conta"
-                }
-            },
-			"qr_code_login": {
-                "data": {
-					"qr_code_json": "JSON version of QR",
-                    "qr_code_pin": "Pin code"
-                },
-				"description": "JSON of QR Code"
             }
         }
     }

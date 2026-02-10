@@ -1,5 +1,7 @@
 """Data Formatter for the Pronote integration."""
 
+from __future__ import annotations
+
 import logging
 
 from slugify import slugify
