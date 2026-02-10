@@ -14,9 +14,7 @@ from custom_components.pronote.coordinator import PronoteDataUpdateCoordinator
 
 def _make_coordinator(data=None, options=None):
     """Create a minimal coordinator for testing."""
-    with patch.object(
-        PronoteDataUpdateCoordinator, "__init__", lambda self, *a, **kw: None
-    ):
+    with patch.object(PronoteDataUpdateCoordinator, "__init__", lambda self, *a, **kw: None):
         coord = PronoteDataUpdateCoordinator.__new__(PronoteDataUpdateCoordinator)
     coord.data = data or {}
     entry = MagicMock()

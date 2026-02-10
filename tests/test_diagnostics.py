@@ -55,9 +55,7 @@ class TestAsyncGetConfigEntryDiagnostics:
         """Sensitive fields like password and username are redacted."""
         entry, _ = _make_entry_and_coordinator(
             coordinator_data={
-                "child_info": SimpleNamespace(
-                    name="Jean", class_name="3A", establishment="College"
-                ),
+                "child_info": SimpleNamespace(name="Jean", class_name="3A", establishment="College"),
                 "account_type": "eleve",
                 "current_period": SimpleNamespace(name="Trimestre 1"),
             },
@@ -75,9 +73,7 @@ class TestAsyncGetConfigEntryDiagnostics:
         """Verify last_update_success, update_interval, and child_info."""
         entry, _ = _make_entry_and_coordinator(
             coordinator_data={
-                "child_info": SimpleNamespace(
-                    name="Jean", class_name="3A", establishment="College"
-                ),
+                "child_info": SimpleNamespace(name="Jean", class_name="3A", establishment="College"),
                 "account_type": "eleve",
                 "current_period": SimpleNamespace(name="Trimestre 1"),
             },
@@ -99,9 +95,7 @@ class TestAsyncGetConfigEntryDiagnostics:
         """Verify all sensor count keys are present in the output."""
         entry, _ = _make_entry_and_coordinator(
             coordinator_data={
-                "child_info": SimpleNamespace(
-                    name="Jean", class_name="3A", establishment="College"
-                ),
+                "child_info": SimpleNamespace(name="Jean", class_name="3A", establishment="College"),
                 "account_type": "eleve",
                 "current_period": SimpleNamespace(name="Trimestre 1"),
                 "lessons_today": [1, 2],

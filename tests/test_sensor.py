@@ -38,6 +38,7 @@ from custom_components.pronote.sensor import (
 # Helper: create a mock coordinator without triggering real __init__
 # ---------------------------------------------------------------------------
 
+
 def _make_coordinator(data=None, options=None):
     """Create a mock coordinator for testing sensors."""
     with patch.object(PronoteDataUpdateCoordinator, "__init__", lambda self, *a, **kw: None):
@@ -459,9 +460,7 @@ class TestPronoteGenericSensor:
         from homeassistant.components.sensor import SensorDeviceClass
 
         coord = _make_coordinator()
-        sensor = PronoteGenericSensor(
-            coord, "next_alarm", "Next alarm", device_class=SensorDeviceClass.TIMESTAMP
-        )
+        sensor = PronoteGenericSensor(coord, "next_alarm", "Next alarm", device_class=SensorDeviceClass.TIMESTAMP)
         assert sensor._attr_device_class == SensorDeviceClass.TIMESTAMP
 
     def test_device_class_not_set(self):
@@ -870,25 +869,19 @@ class TestPronoteEvaluationsSensor:
     def test_native_value(self):
         coord = _make_coordinator()
         coord.data["evaluations"] = [_make_evaluation(), _make_evaluation()]
-        sensor = PronoteEvaluationsSensor(
-            coord, key="evaluations", name="Evaluations", period_key="trimestre_1"
-        )
+        sensor = PronoteEvaluationsSensor(coord, key="evaluations", name="Evaluations", period_key="trimestre_1")
         assert sensor.native_value == 2
 
     def test_native_value_none(self):
         coord = _make_coordinator()
         coord.data["evaluations"] = None
-        sensor = PronoteEvaluationsSensor(
-            coord, key="evaluations", name="Evaluations", period_key="trimestre_1"
-        )
+        sensor = PronoteEvaluationsSensor(coord, key="evaluations", name="Evaluations", period_key="trimestre_1")
         assert sensor.native_value is None
 
     def test_extra_state_attributes(self):
         coord = _make_coordinator()
         coord.data["evaluations"] = [_make_evaluation()]
-        sensor = PronoteEvaluationsSensor(
-            coord, key="evaluations", name="Evaluations", period_key="trimestre_1"
-        )
+        sensor = PronoteEvaluationsSensor(coord, key="evaluations", name="Evaluations", period_key="trimestre_1")
         attrs = sensor.extra_state_attributes
 
         assert "evaluations" in attrs
@@ -900,9 +893,7 @@ class TestPronoteEvaluationsSensor:
         evaluations = [_make_evaluation(name=f"Eval {i}") for i in range(EVALUATIONS_TO_DISPLAY + 5)]
         coord = _make_coordinator()
         coord.data["evaluations"] = evaluations
-        sensor = PronoteEvaluationsSensor(
-            coord, key="evaluations", name="Evaluations", period_key="trimestre_1"
-        )
+        sensor = PronoteEvaluationsSensor(coord, key="evaluations", name="Evaluations", period_key="trimestre_1")
         attrs = sensor.extra_state_attributes
 
         assert len(attrs["evaluations"]) == EVALUATIONS_TO_DISPLAY - 1
@@ -910,9 +901,7 @@ class TestPronoteEvaluationsSensor:
     def test_extra_state_attributes_none(self):
         coord = _make_coordinator()
         coord.data["evaluations"] = None
-        sensor = PronoteEvaluationsSensor(
-            coord, key="evaluations", name="Evaluations", period_key="trimestre_1"
-        )
+        sensor = PronoteEvaluationsSensor(coord, key="evaluations", name="Evaluations", period_key="trimestre_1")
         attrs = sensor.extra_state_attributes
 
         assert attrs["evaluations"] == []
@@ -970,25 +959,19 @@ class TestPronotePunishmentsSensor:
     def test_native_value(self):
         coord = _make_coordinator()
         coord.data["punishments"] = [_make_punishment()]
-        sensor = PronotePunishmentsSensor(
-            coord, key="punishments", name="Punishments", period_key="trimestre_1"
-        )
+        sensor = PronotePunishmentsSensor(coord, key="punishments", name="Punishments", period_key="trimestre_1")
         assert sensor.native_value == 1
 
     def test_native_value_none(self):
         coord = _make_coordinator()
         coord.data["punishments"] = None
-        sensor = PronotePunishmentsSensor(
-            coord, key="punishments", name="Punishments", period_key="trimestre_1"
-        )
+        sensor = PronotePunishmentsSensor(coord, key="punishments", name="Punishments", period_key="trimestre_1")
         assert sensor.native_value is None
 
     def test_extra_state_attributes(self):
         coord = _make_coordinator()
         coord.data["punishments"] = [_make_punishment()]
-        sensor = PronotePunishmentsSensor(
-            coord, key="punishments", name="Punishments", period_key="trimestre_1"
-        )
+        sensor = PronotePunishmentsSensor(coord, key="punishments", name="Punishments", period_key="trimestre_1")
         attrs = sensor.extra_state_attributes
 
         assert "punishments" in attrs
@@ -998,9 +981,7 @@ class TestPronotePunishmentsSensor:
     def test_extra_state_attributes_none(self):
         coord = _make_coordinator()
         coord.data["punishments"] = None
-        sensor = PronotePunishmentsSensor(
-            coord, key="punishments", name="Punishments", period_key="trimestre_1"
-        )
+        sensor = PronotePunishmentsSensor(coord, key="punishments", name="Punishments", period_key="trimestre_1")
         attrs = sensor.extra_state_attributes
 
         assert attrs["punishments"] == []
@@ -1255,23 +1236,17 @@ class TestPronotePeriodsSensor:
 class TestPronotePeriodRelatedSensor:
     def test_is_current_period_true(self):
         coord = _make_coordinator()
-        sensor = PronotePeriodRelatedSensor(
-            coord, key="grades", name="Grades", period_key="trimestre_1"
-        )
+        sensor = PronotePeriodRelatedSensor(coord, key="grades", name="Grades", period_key="trimestre_1")
         assert sensor._is_current_period is True
 
     def test_is_current_period_false(self):
         coord = _make_coordinator()
-        sensor = PronotePeriodRelatedSensor(
-            coord, key="grades", name="Grades", period_key="trimestre_2"
-        )
+        sensor = PronotePeriodRelatedSensor(coord, key="grades", name="Grades", period_key="trimestre_2")
         assert sensor._is_current_period is False
 
     def test_extra_state_attributes_includes_period_info(self):
         coord = _make_coordinator()
-        sensor = PronotePeriodRelatedSensor(
-            coord, key="grades", name="Grades", period_key="trimestre_1"
-        )
+        sensor = PronotePeriodRelatedSensor(coord, key="grades", name="Grades", period_key="trimestre_1")
         attrs = sensor.extra_state_attributes
 
         assert "period_key" in attrs

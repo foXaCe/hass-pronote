@@ -155,6 +155,7 @@ def _make_client(
     if lessons_side_effects is not None:
         client.lessons.side_effect = lessons_side_effects
     else:
+
         def lessons_fn(d, end=None):
             if end is not None:
                 return lessons_period if lessons_period is not None else []
@@ -163,16 +164,19 @@ def _make_client(
             if d == TODAY + timedelta(days=1):
                 return lessons_tomorrow if lessons_tomorrow is not None else []
             return []
+
         client.lessons.side_effect = lessons_fn
 
     # Homework
     if homework_side_effect:
         client.homework.side_effect = homework_side_effect
     else:
+
         def homework_fn(d, end=None):
             if end is not None:
                 return homework_period if homework_period is not None else []
             return homework if homework is not None else []
+
         client.homework.side_effect = homework_fn
 
     # Information and surveys
@@ -390,6 +394,7 @@ class TestFetchLessonsErrors:
 
     def test_fetch_lessons_period_all_fail(self):
         """All retry attempts fail."""
+
         def lessons_fn(d, end=None):
             if end is not None:
                 raise RuntimeError("Always fail")
@@ -432,6 +437,7 @@ class TestFetchLessonsNextDay:
 
     def test_fetch_lessons_next_day_not_found(self):
         """All search days return empty."""
+
         def lessons_fn(d, end=None):
             return []
 

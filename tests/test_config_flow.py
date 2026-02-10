@@ -25,6 +25,7 @@ from custom_components.pronote.const import (
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _make_eleve_client(name="Jean Dupont"):
     """Return a mock pronote client for an 'eleve' account."""
     client = MagicMock()
@@ -141,9 +142,7 @@ class TestExceptions:
 
 async def test_step_user_shows_menu(hass: HomeAssistant) -> None:
     """The initial user step should present a menu with two login options."""
-    result = await hass.config_entries.flow.async_init(
-        DOMAIN, context={"source": config_entries.SOURCE_USER}
-    )
+    result = await hass.config_entries.flow.async_init(DOMAIN, context={"source": config_entries.SOURCE_USER})
     assert result["type"] is FlowResultType.MENU
     assert "username_password_login" in result["menu_options"]
     assert "qr_code_login" in result["menu_options"]
@@ -156,9 +155,7 @@ async def test_step_user_shows_menu(hass: HomeAssistant) -> None:
 
 async def test_up_login_shows_form(hass: HomeAssistant) -> None:
     """Selecting username_password_login shows the UP form."""
-    result = await hass.config_entries.flow.async_init(
-        DOMAIN, context={"source": config_entries.SOURCE_USER}
-    )
+    result = await hass.config_entries.flow.async_init(DOMAIN, context={"source": config_entries.SOURCE_USER})
     result = await hass.config_entries.flow.async_configure(
         result["flow_id"],
         {"next_step_id": "username_password_login"},
@@ -169,9 +166,7 @@ async def test_up_login_shows_form(hass: HomeAssistant) -> None:
 
 async def test_up_login_eleve_success(hass: HomeAssistant) -> None:
     """Successful eleve login via UP goes to nickname step."""
-    result = await hass.config_entries.flow.async_init(
-        DOMAIN, context={"source": config_entries.SOURCE_USER}
-    )
+    result = await hass.config_entries.flow.async_init(DOMAIN, context={"source": config_entries.SOURCE_USER})
     result = await hass.config_entries.flow.async_configure(
         result["flow_id"],
         {"next_step_id": "username_password_login"},
@@ -193,9 +188,7 @@ async def test_up_login_eleve_success(hass: HomeAssistant) -> None:
 
 async def test_up_login_eleve_full_flow(hass: HomeAssistant) -> None:
     """Full UP eleve flow: menu -> UP form -> nickname -> create entry."""
-    result = await hass.config_entries.flow.async_init(
-        DOMAIN, context={"source": config_entries.SOURCE_USER}
-    )
+    result = await hass.config_entries.flow.async_init(DOMAIN, context={"source": config_entries.SOURCE_USER})
     result = await hass.config_entries.flow.async_configure(
         result["flow_id"],
         {"next_step_id": "username_password_login"},
@@ -228,9 +221,7 @@ async def test_up_login_eleve_full_flow(hass: HomeAssistant) -> None:
 
 async def test_up_login_parent_success(hass: HomeAssistant) -> None:
     """Successful parent login via UP goes to parent step, then nickname."""
-    result = await hass.config_entries.flow.async_init(
-        DOMAIN, context={"source": config_entries.SOURCE_USER}
-    )
+    result = await hass.config_entries.flow.async_init(DOMAIN, context={"source": config_entries.SOURCE_USER})
     result = await hass.config_entries.flow.async_configure(
         result["flow_id"],
         {"next_step_id": "username_password_login"},
@@ -252,9 +243,7 @@ async def test_up_login_parent_success(hass: HomeAssistant) -> None:
 
 async def test_up_login_parent_full_flow(hass: HomeAssistant) -> None:
     """Full UP parent flow: menu -> UP form -> parent -> nickname -> create entry."""
-    result = await hass.config_entries.flow.async_init(
-        DOMAIN, context={"source": config_entries.SOURCE_USER}
-    )
+    result = await hass.config_entries.flow.async_init(DOMAIN, context={"source": config_entries.SOURCE_USER})
     result = await hass.config_entries.flow.async_configure(
         result["flow_id"],
         {"next_step_id": "username_password_login"},
@@ -294,9 +283,7 @@ async def test_up_login_parent_full_flow(hass: HomeAssistant) -> None:
 
 async def test_up_login_invalid_auth_none_client(hass: HomeAssistant) -> None:
     """When get_client_from_username_password returns None, show invalid_auth."""
-    result = await hass.config_entries.flow.async_init(
-        DOMAIN, context={"source": config_entries.SOURCE_USER}
-    )
+    result = await hass.config_entries.flow.async_init(DOMAIN, context={"source": config_entries.SOURCE_USER})
     result = await hass.config_entries.flow.async_configure(
         result["flow_id"],
         {"next_step_id": "username_password_login"},
@@ -318,9 +305,7 @@ async def test_up_login_invalid_auth_none_client(hass: HomeAssistant) -> None:
 
 async def test_up_login_invalid_auth_raised(hass: HomeAssistant) -> None:
     """When InvalidAuth is raised directly, show invalid_auth."""
-    result = await hass.config_entries.flow.async_init(
-        DOMAIN, context={"source": config_entries.SOURCE_USER}
-    )
+    result = await hass.config_entries.flow.async_init(DOMAIN, context={"source": config_entries.SOURCE_USER})
     result = await hass.config_entries.flow.async_configure(
         result["flow_id"],
         {"next_step_id": "username_password_login"},
@@ -341,9 +326,7 @@ async def test_up_login_invalid_auth_raised(hass: HomeAssistant) -> None:
 
 async def test_up_login_crypto_error(hass: HomeAssistant) -> None:
     """When CryptoError is raised by pronotepy, show invalid_auth."""
-    result = await hass.config_entries.flow.async_init(
-        DOMAIN, context={"source": config_entries.SOURCE_USER}
-    )
+    result = await hass.config_entries.flow.async_init(DOMAIN, context={"source": config_entries.SOURCE_USER})
     result = await hass.config_entries.flow.async_configure(
         result["flow_id"],
         {"next_step_id": "username_password_login"},
@@ -364,9 +347,7 @@ async def test_up_login_crypto_error(hass: HomeAssistant) -> None:
 
 async def test_up_login_with_ent(hass: HomeAssistant) -> None:
     """UP login with an ENT function stores it in user inputs."""
-    result = await hass.config_entries.flow.async_init(
-        DOMAIN, context={"source": config_entries.SOURCE_USER}
-    )
+    result = await hass.config_entries.flow.async_init(DOMAIN, context={"source": config_entries.SOURCE_USER})
     result = await hass.config_entries.flow.async_configure(
         result["flow_id"],
         {"next_step_id": "username_password_login"},
@@ -394,9 +375,7 @@ async def test_up_login_with_ent(hass: HomeAssistant) -> None:
 
 async def test_qr_login_shows_form(hass: HomeAssistant) -> None:
     """Selecting qr_code_login shows the QR form."""
-    result = await hass.config_entries.flow.async_init(
-        DOMAIN, context={"source": config_entries.SOURCE_USER}
-    )
+    result = await hass.config_entries.flow.async_init(DOMAIN, context={"source": config_entries.SOURCE_USER})
     result = await hass.config_entries.flow.async_configure(
         result["flow_id"],
         {"next_step_id": "qr_code_login"},
@@ -407,9 +386,7 @@ async def test_qr_login_shows_form(hass: HomeAssistant) -> None:
 
 async def test_qr_login_eleve_success(hass: HomeAssistant) -> None:
     """Successful eleve QR login goes to nickname step."""
-    result = await hass.config_entries.flow.async_init(
-        DOMAIN, context={"source": config_entries.SOURCE_USER}
-    )
+    result = await hass.config_entries.flow.async_init(DOMAIN, context={"source": config_entries.SOURCE_USER})
     result = await hass.config_entries.flow.async_configure(
         result["flow_id"],
         {"next_step_id": "qr_code_login"},
@@ -431,9 +408,7 @@ async def test_qr_login_eleve_success(hass: HomeAssistant) -> None:
 
 async def test_qr_login_eleve_full_flow(hass: HomeAssistant) -> None:
     """Full QR eleve flow: menu -> QR form -> nickname -> create entry."""
-    result = await hass.config_entries.flow.async_init(
-        DOMAIN, context={"source": config_entries.SOURCE_USER}
-    )
+    result = await hass.config_entries.flow.async_init(DOMAIN, context={"source": config_entries.SOURCE_USER})
     result = await hass.config_entries.flow.async_configure(
         result["flow_id"],
         {"next_step_id": "qr_code_login"},
@@ -468,9 +443,7 @@ async def test_qr_login_eleve_full_flow(hass: HomeAssistant) -> None:
 
 async def test_qr_login_parent_success(hass: HomeAssistant) -> None:
     """Successful parent QR login goes to parent step."""
-    result = await hass.config_entries.flow.async_init(
-        DOMAIN, context={"source": config_entries.SOURCE_USER}
-    )
+    result = await hass.config_entries.flow.async_init(DOMAIN, context={"source": config_entries.SOURCE_USER})
     result = await hass.config_entries.flow.async_configure(
         result["flow_id"],
         {"next_step_id": "qr_code_login"},
@@ -492,9 +465,7 @@ async def test_qr_login_parent_success(hass: HomeAssistant) -> None:
 
 async def test_qr_login_parent_full_flow(hass: HomeAssistant) -> None:
     """Full QR parent flow: menu -> QR form -> parent -> nickname -> create entry."""
-    result = await hass.config_entries.flow.async_init(
-        DOMAIN, context={"source": config_entries.SOURCE_USER}
-    )
+    result = await hass.config_entries.flow.async_init(DOMAIN, context={"source": config_entries.SOURCE_USER})
     result = await hass.config_entries.flow.async_configure(
         result["flow_id"],
         {"next_step_id": "qr_code_login"},
@@ -532,9 +503,7 @@ async def test_qr_login_parent_full_flow(hass: HomeAssistant) -> None:
 
 async def test_qr_login_invalid_auth_none_client(hass: HomeAssistant) -> None:
     """When get_client_from_qr_code returns None, show invalid_auth."""
-    result = await hass.config_entries.flow.async_init(
-        DOMAIN, context={"source": config_entries.SOURCE_USER}
-    )
+    result = await hass.config_entries.flow.async_init(DOMAIN, context={"source": config_entries.SOURCE_USER})
     result = await hass.config_entries.flow.async_configure(
         result["flow_id"],
         {"next_step_id": "qr_code_login"},
@@ -556,9 +525,7 @@ async def test_qr_login_invalid_auth_none_client(hass: HomeAssistant) -> None:
 
 async def test_qr_login_invalid_auth_raised(hass: HomeAssistant) -> None:
     """When InvalidAuth is raised for QR login, show invalid_auth."""
-    result = await hass.config_entries.flow.async_init(
-        DOMAIN, context={"source": config_entries.SOURCE_USER}
-    )
+    result = await hass.config_entries.flow.async_init(DOMAIN, context={"source": config_entries.SOURCE_USER})
     result = await hass.config_entries.flow.async_configure(
         result["flow_id"],
         {"next_step_id": "qr_code_login"},
@@ -585,9 +552,7 @@ async def test_qr_login_invalid_auth_raised(hass: HomeAssistant) -> None:
 
 async def test_nickname_default_uses_last_name(hass: HomeAssistant) -> None:
     """The default nickname for 'Jean Dupont' should be 'Dupont'."""
-    result = await hass.config_entries.flow.async_init(
-        DOMAIN, context={"source": config_entries.SOURCE_USER}
-    )
+    result = await hass.config_entries.flow.async_init(DOMAIN, context={"source": config_entries.SOURCE_USER})
     result = await hass.config_entries.flow.async_configure(
         result["flow_id"],
         {"next_step_id": "username_password_login"},
@@ -613,9 +578,7 @@ async def test_nickname_default_uses_last_name(hass: HomeAssistant) -> None:
 
 async def test_nickname_single_name_default(hass: HomeAssistant) -> None:
     """When client name is a single word, nickname default is that word."""
-    result = await hass.config_entries.flow.async_init(
-        DOMAIN, context={"source": config_entries.SOURCE_USER}
-    )
+    result = await hass.config_entries.flow.async_init(DOMAIN, context={"source": config_entries.SOURCE_USER})
     result = await hass.config_entries.flow.async_configure(
         result["flow_id"],
         {"next_step_id": "username_password_login"},
@@ -649,9 +612,7 @@ async def test_nickname_abort_if_unique_id_configured(hass: HomeAssistant) -> No
     )
     existing.add_to_hass(hass)
 
-    result = await hass.config_entries.flow.async_init(
-        DOMAIN, context={"source": config_entries.SOURCE_USER}
-    )
+    result = await hass.config_entries.flow.async_init(DOMAIN, context={"source": config_entries.SOURCE_USER})
     result = await hass.config_entries.flow.async_configure(
         result["flow_id"],
         {"next_step_id": "username_password_login"},
@@ -673,9 +634,7 @@ async def test_nickname_abort_if_unique_id_configured(hass: HomeAssistant) -> No
 
 async def test_nickname_parent_uses_child_name_for_unique_id(hass: HomeAssistant) -> None:
     """For parent accounts the unique_id is the child's name, not the parent's."""
-    result = await hass.config_entries.flow.async_init(
-        DOMAIN, context={"source": config_entries.SOURCE_USER}
-    )
+    result = await hass.config_entries.flow.async_init(DOMAIN, context={"source": config_entries.SOURCE_USER})
     result = await hass.config_entries.flow.async_configure(
         result["flow_id"],
         {"next_step_id": "username_password_login"},
@@ -1179,9 +1138,7 @@ async def test_options_flow_preserves_existing_options(hass: HomeAssistant) -> N
 
 async def test_qr_stores_uuid(hass: HomeAssistant) -> None:
     """QR code login generates and stores a UUID in user inputs."""
-    result = await hass.config_entries.flow.async_init(
-        DOMAIN, context={"source": config_entries.SOURCE_USER}
-    )
+    result = await hass.config_entries.flow.async_init(DOMAIN, context={"source": config_entries.SOURCE_USER})
     result = await hass.config_entries.flow.async_configure(
         result["flow_id"],
         {"next_step_id": "qr_code_login"},
@@ -1211,9 +1168,7 @@ async def test_qr_stores_uuid(hass: HomeAssistant) -> None:
 
 async def test_up_login_connection_type_set(hass: HomeAssistant) -> None:
     """UP login sets connection_type to 'username_password' in user_inputs."""
-    result = await hass.config_entries.flow.async_init(
-        DOMAIN, context={"source": config_entries.SOURCE_USER}
-    )
+    result = await hass.config_entries.flow.async_init(DOMAIN, context={"source": config_entries.SOURCE_USER})
     result = await hass.config_entries.flow.async_configure(
         result["flow_id"],
         {"next_step_id": "username_password_login"},
@@ -1240,9 +1195,7 @@ async def test_up_login_connection_type_set(hass: HomeAssistant) -> None:
 
 async def test_qr_login_connection_type_set(hass: HomeAssistant) -> None:
     """QR login sets connection_type to 'qrcode' in user_inputs."""
-    result = await hass.config_entries.flow.async_init(
-        DOMAIN, context={"source": config_entries.SOURCE_USER}
-    )
+    result = await hass.config_entries.flow.async_init(DOMAIN, context={"source": config_entries.SOURCE_USER})
     result = await hass.config_entries.flow.async_configure(
         result["flow_id"],
         {"next_step_id": "qr_code_login"},
@@ -1268,9 +1221,7 @@ async def test_qr_login_connection_type_set(hass: HomeAssistant) -> None:
 
 async def test_parent_step_shows_children(hass: HomeAssistant) -> None:
     """Parent step shows a form with child selection matching client children."""
-    result = await hass.config_entries.flow.async_init(
-        DOMAIN, context={"source": config_entries.SOURCE_USER}
-    )
+    result = await hass.config_entries.flow.async_init(DOMAIN, context={"source": config_entries.SOURCE_USER})
     result = await hass.config_entries.flow.async_configure(
         result["flow_id"],
         {"next_step_id": "username_password_login"},

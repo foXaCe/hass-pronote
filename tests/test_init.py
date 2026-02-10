@@ -92,9 +92,7 @@ class TestAsyncSetupEntry:
         assert result is True
         assert entry.runtime_data is mock_coordinator
         mock_coordinator.async_config_entry_first_refresh.assert_awaited_once()
-        hass.config_entries.async_forward_entry_setups.assert_awaited_once_with(
-            entry, PLATFORMS
-        )
+        hass.config_entries.async_forward_entry_setups.assert_awaited_once_with(entry, PLATFORMS)
         entry.async_on_unload.assert_called_once()
 
     async def test_setup_auth_failure(self, hass: HomeAssistant):
@@ -109,9 +107,7 @@ class TestAsyncSetupEntry:
         entry.options = {"refresh_interval": 15, "nickname": ""}
 
         mock_coordinator = MagicMock()
-        mock_coordinator.async_config_entry_first_refresh = AsyncMock(
-            side_effect=ConfigEntryNotReady("Auth failed")
-        )
+        mock_coordinator.async_config_entry_first_refresh = AsyncMock(side_effect=ConfigEntryNotReady("Auth failed"))
 
         with (
             patch(
@@ -132,6 +128,4 @@ class TestAsyncUnloadEntry:
         result = await async_unload_entry(hass, entry)
 
         assert result is True
-        hass.config_entries.async_unload_platforms.assert_awaited_once_with(
-            entry, PLATFORMS
-        )
+        hass.config_entries.async_unload_platforms.assert_awaited_once_with(entry, PLATFORMS)
