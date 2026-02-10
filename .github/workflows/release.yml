@@ -1,26 +1,104 @@
 name: Release
 
 on:
-  release:
-    types: [published]
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
 
 jobs:
   release:
-    name: Prepare release
+    name: Create release
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
     steps:
       - uses: actions/checkout@v6
-      - name: Set version number
+        with:
+          fetch-depth: 0
+
+      - name: Get version from tag
+        id: version
+        run: echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+
+      - name: Set version in manifest.json
         run: |
-          yq -i -o json '.version="${{ github.event.release.tag_name }}"' \
+          yq -i -o json '.version="${{ steps.version.outputs.version }}"' \
             "${{ github.workspace }}/custom_components/pronote/manifest.json"
-      - name: ZIP Pronote Dir
+
+      - name: Generate changelog
+        id: changelog
+        run: |
+          # Find the previous tag
+          PREVIOUS_TAG=$(git tag --sort=-version:refname | grep -E '^v' | sed -n '2p')
+
+          if [ -z "$PREVIOUS_TAG" ]; then
+            RANGE="HEAD"
+            HEADER="## Initial release"
+          else
+            RANGE="${PREVIOUS_TAG}..HEAD"
+            HEADER="## Changes since ${PREVIOUS_TAG}"
+          fi
+
+          # Collect commits grouped by type
+          FEATURES=""
+          FIXES=""
+          REFACTORS=""
+          TESTS=""
+          CHORES=""
+          OTHERS=""
+
+          # Strip conventional commit prefix: "type(scope): msg" or "type: msg" → "msg"
+          strip_prefix() {
+            echo "$1" | sed -E 's/^[a-z]+(\([^)]*\))?[!]?:\s*//'
+          }
+
+          while IFS= read -r line; do
+            msg=$(strip_prefix "$line")
+            case "$line" in
+              feat*)     FEATURES="${FEATURES}\n- ${msg}" ;;
+              fix*)      FIXES="${FIXES}\n- ${msg}" ;;
+              refactor*) REFACTORS="${REFACTORS}\n- ${msg}" ;;
+              test*)     TESTS="${TESTS}\n- ${msg}" ;;
+              perf*)     FIXES="${FIXES}\n- ${msg}" ;;
+              chore*|ci*|style*|docs*|build*) CHORES="${CHORES}\n- ${msg}" ;;
+              *)         OTHERS="${OTHERS}\n- ${line}" ;;
+            esac
+          done < <(git log "$RANGE" --pretty=format:"%s" --no-merges)
+
+          # Build changelog body
+          BODY="${HEADER}"
+
+          if [ -n "$FEATURES" ]; then
+            BODY="${BODY}\n\n### ✨ New features\n${FEATURES}"
+          fi
+          if [ -n "$FIXES" ]; then
+            BODY="${BODY}\n\n### 🐛 Bug fixes\n${FIXES}"
+          fi
+          if [ -n "$REFACTORS" ]; then
+            BODY="${BODY}\n\n### ♻️ Refactoring\n${REFACTORS}"
+          fi
+          if [ -n "$TESTS" ]; then
+            BODY="${BODY}\n\n### 🧪 Tests\n${TESTS}"
+          fi
+          if [ -n "$CHORES" ]; then
+            BODY="${BODY}\n\n### 🔧 Maintenance\n${CHORES}"
+          fi
+          if [ -n "$OTHERS" ]; then
+            BODY="${BODY}\n\n### 📝 Other\n${OTHERS}"
+          fi
+
+          # Write to file for the release step
+          echo -e "$BODY" > "${{ github.workspace }}/CHANGELOG.md"
+          cat "${{ github.workspace }}/CHANGELOG.md"
+
+      - name: Create ZIP
         run: |
           cd "${{ github.workspace }}/custom_components/pronote"
           zip pronote.zip -r ./
-      - name: Upload zip to release
+
+      - name: Create GitHub release
         uses: softprops/action-gh-release@v2.5.0
         with:
+          body_path: ${{ github.workspace }}/CHANGELOG.md
           files: ${{ github.workspace }}/custom_components/pronote/pronote.zip
