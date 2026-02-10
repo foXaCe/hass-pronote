@@ -224,9 +224,7 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 self._user_inputs["qr_code_pin"] = user_input.get("qr_code_pin", "")
                 self._user_inputs["qr_code_uuid"] = str(uuid.uuid4())
                 try:
-                    client = await self.hass.async_add_executor_job(
-                        get_client_from_qr_code, self._user_inputs
-                    )
+                    client = await self.hass.async_add_executor_job(get_client_from_qr_code, self._user_inputs)
                     if client is None:
                         raise InvalidAuth
                 except (InvalidAuth, Exception):

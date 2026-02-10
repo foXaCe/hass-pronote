@@ -81,15 +81,11 @@ class PronoteCalendar(PronoteEntity, CalendarEntity):
         else:
             now = datetime.now()
             try:
-                current_event = next(
-                    event for event in lessons if event.start <= now < event.end
-                )
+                current_event = next(event for event in lessons if event.start <= now < event.end)
             except StopIteration:
                 self._event = None
             else:
-                self._event = async_get_calendar_event_from_lessons(
-                    current_event, self.hass.config.time_zone
-                )
+                self._event = async_get_calendar_event_from_lessons(current_event, self.hass.config.time_zone)
 
         super()._handle_coordinator_update()
 

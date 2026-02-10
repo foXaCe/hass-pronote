@@ -295,9 +295,7 @@ class PronoteDataUpdateCoordinator(TimestampDataUpdateCoordinator):
 
         # Fetch ALL data in a single executor call
         try:
-            fetched = await self.hass.async_add_executor_job(
-                _fetch_all_sync_data, client, dict(config_data), today
-            )
+            fetched = await self.hass.async_add_executor_job(_fetch_all_sync_data, client, dict(config_data), today)
         except Exception as err:
             raise UpdateFailed(f"Error fetching data from Pronote: {err}") from err
 
