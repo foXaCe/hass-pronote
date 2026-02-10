@@ -80,6 +80,16 @@ This integration provides several sensors, always prefixed with `pronote_LASTNAM
 
 The sensors are updated every 15 minutes.
 
+## Removal
+
+To remove the integration:
+1. Go to Settings > Devices & Services > Integrations
+2. Find the Pronote integration entry you want to remove
+3. Click the three dots menu (⋮) and select "Delete"
+4. Restart Home Assistant
+
+To fully uninstall, also remove the `pronote` folder from `custom_components` and remove it from HACS.
+
 ## Cards
 
 Cards are available here: https://github.com/delphiki/lovelace-pronote
