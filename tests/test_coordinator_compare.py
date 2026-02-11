@@ -46,21 +46,21 @@ class TestCompareData:
         coord.data = {"grades": [_make_grade(date(2025, 1, 15), "Maths", "15/20")]}
 
         # Should not raise
-        coord.compare_data(None, "grades", ["date", "subject", "grade_out_of"], "new_grade", _format_grade)
+        coord._compare_data(None, "grades", ["date", "subject", "grade_out_of"], "new_grade", _format_grade)
 
     def test_previous_data_none_key(self):
         coord = _make_coordinator()
         coord.data = {"grades": [_make_grade(date(2025, 1, 15), "Maths", "15/20")]}
 
         # Should not raise
-        coord.compare_data({"grades": None}, "grades", ["date", "subject", "grade_out_of"], "new_grade", _format_grade)
+        coord._compare_data({"grades": None}, "grades", ["date", "subject", "grade_out_of"], "new_grade", _format_grade)
 
     def test_current_data_none(self):
         coord = _make_coordinator()
         coord.data = {"grades": None}
 
         # Should not raise
-        coord.compare_data(
+        coord._compare_data(
             {"grades": [_make_grade(date(2025, 1, 15), "Maths", "15/20")]},
             "grades",
             ["date", "subject", "grade_out_of"],
@@ -83,7 +83,7 @@ class TestCompareData:
             "grades": [_make_grade(date(2025, 1, 15), "Maths", "15/20")],
         }
 
-        coord.compare_data(previous, "grades", ["date", "subject", "grade_out_of"], "new_grade", _format_grade)
+        coord._compare_data(previous, "grades", ["date", "subject", "grade_out_of"], "new_grade", _format_grade)
 
         # Should fire one event for the new Français grade
         coord.hass.bus.async_fire.assert_called_once()
@@ -101,7 +101,7 @@ class TestCompareData:
 
         previous = {"grades": [grade]}
 
-        coord.compare_data(previous, "grades", ["date", "subject", "grade_out_of"], "new_grade", _format_grade)
+        coord._compare_data(previous, "grades", ["date", "subject", "grade_out_of"], "new_grade", _format_grade)
 
         coord.hass.bus.async_fire.assert_not_called()
 
@@ -115,7 +115,7 @@ class TestTriggerEvent:
         }
 
         event_data = {"date": "2025-01-15", "subject": "Maths"}
-        coord.trigger_event("new_grade", event_data)
+        coord._trigger_event("new_grade", event_data)
 
         coord.hass.bus.async_fire.assert_called_once()
         call_args = coord.hass.bus.async_fire.call_args

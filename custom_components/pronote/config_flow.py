@@ -15,13 +15,16 @@ from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.selector import SelectSelector, SelectSelectorConfig
 from pronotepy.ent import *  # noqa: F403
 
+from .api import (
+    AuthenticationError,
+    PronoteAPIClient,
+)
 from .const import (
     DEFAULT_ALARM_OFFSET,
     DEFAULT_LUNCH_BREAK_TIME,
     DEFAULT_REFRESH_INTERVAL,
     DOMAIN,
 )
-from .pronote_helper import get_client_from_qr_code, get_client_from_username_password
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -70,6 +73,7 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
     def __init__(self) -> None:
         self._user_inputs: dict = {}
+        self._api_client = PronoteAPIClient()
 
     async def async_step_user(self, user_input: dict | None = None) -> FlowResult:
         """Handle a flow initialized by the user."""
@@ -89,13 +93,19 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 _LOGGER.debug("User Input: %s", user_input)
                 self._user_inputs.update(user_input)
                 self._user_inputs["connection_type"] = "username_password"
-                client = await self.hass.async_add_executor_job(get_client_from_username_password, self._user_inputs)
+
+                # Use the new API client
+                await self._api_client.authenticate("username_password", self._user_inputs)
+                client = self._api_client._client  # Access internal client for compatibility
 
                 if client is None:
                     raise InvalidAuth
-            except pronotepy.exceptions.CryptoError:
+            except AuthenticationError:
                 errors["base"] = "invalid_auth"
             except InvalidAuth:
+                errors["base"] = "invalid_auth"
+            except Exception as err:
+                _LOGGER.error("Unexpected error during auth: %s", err)
                 errors["base"] = "invalid_auth"
             else:
                 self.pronote_client = client
@@ -123,17 +133,27 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 self._user_inputs["connection_type"] = "qrcode"
                 self._user_inputs["qr_code_uuid"] = str(uuid.uuid4())
 
-                client = await self.hass.async_add_executor_job(get_client_from_qr_code, self._user_inputs)
+                # Use the new API client
+                await self._api_client.authenticate("qrcode", self._user_inputs)
+                client = self._api_client._client  # Access internal client for compatibility
+                creds = self._api_client._credentials
 
                 if client is None:
                     raise InvalidAuth
+            except AuthenticationError:
+                errors["base"] = "invalid_auth"
             except InvalidAuth:
                 errors["base"] = "invalid_auth"
+            except Exception as err:
+                _LOGGER.error("Unexpected error during QR auth: %s", err)
+                errors["base"] = "invalid_auth"
             else:
-                self._user_inputs["qr_code_url"] = client.pronote_url
-                self._user_inputs["qr_code_username"] = client.username
-                self._user_inputs["qr_code_password"] = client.password
-                self._user_inputs["qr_code_uuid"] = client.uuid
+                # Save credentials from auth response
+                if creds:
+                    self._user_inputs["qr_code_url"] = creds.pronote_url
+                    self._user_inputs["qr_code_username"] = creds.username
+                    self._user_inputs["qr_code_password"] = creds.password
+                    self._user_inputs["qr_code_uuid"] = creds.uuid
 
                 self.pronote_client = client
 
@@ -210,6 +230,8 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     async def async_step_reauth(self, entry_data: dict[str, Any]) -> FlowResult:
         """Handle reauth when credentials expire."""
         self._user_inputs = dict(entry_data)
+        # Reset API client for fresh auth
+        self._api_client = PronoteAPIClient()
         return await self.async_step_reauth_confirm()
 
     async def async_step_reauth_confirm(self, user_input: dict | None = None) -> FlowResult:
@@ -224,16 +246,19 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 self._user_inputs["qr_code_pin"] = user_input.get("qr_code_pin", "")
                 self._user_inputs["qr_code_uuid"] = str(uuid.uuid4())
                 try:
-                    client = await self.hass.async_add_executor_job(get_client_from_qr_code, self._user_inputs)
+                    await self._api_client.authenticate("qrcode", self._user_inputs)
+                    client = self._api_client._client
+                    creds = self._api_client._credentials
                     if client is None:
                         raise InvalidAuth
-                except (InvalidAuth, Exception):
+                except (AuthenticationError, InvalidAuth, Exception):
                     errors["base"] = "invalid_auth"
                 else:
-                    self._user_inputs["qr_code_url"] = client.pronote_url
-                    self._user_inputs["qr_code_username"] = client.username
-                    self._user_inputs["qr_code_password"] = client.password
-                    self._user_inputs["qr_code_uuid"] = client.uuid
+                    if creds:
+                        self._user_inputs["qr_code_url"] = creds.pronote_url
+                        self._user_inputs["qr_code_username"] = creds.username
+                        self._user_inputs["qr_code_password"] = creds.password
+                        self._user_inputs["qr_code_uuid"] = creds.uuid
                     return self.async_update_reload_and_abort(
                         self._get_reauth_entry(),
                         data=self._user_inputs,
@@ -241,12 +266,11 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             else:
                 self._user_inputs["password"] = user_input["password"]
                 try:
-                    client = await self.hass.async_add_executor_job(
-                        get_client_from_username_password, self._user_inputs
-                    )
+                    await self._api_client.authenticate("username_password", self._user_inputs)
+                    client = self._api_client._client
                     if client is None:
                         raise InvalidAuth
-                except (InvalidAuth, pronotepy.exceptions.CryptoError, Exception):
+                except (AuthenticationError, InvalidAuth, Exception):
                     errors["base"] = "invalid_auth"
                 else:
                     return self.async_update_reload_and_abort(
