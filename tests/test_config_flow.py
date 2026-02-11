@@ -65,20 +65,6 @@ def _make_credentials():
     )
 
 
-def _create_mock_api_client(mock_client, mock_creds=None):
-    """Create a mock API client class."""
-
-    class MockAPIClient:
-        def __init__(self, hass=None):
-            self._client = mock_client
-            self._credentials = mock_creds
-
-        async def authenticate(self, conn_type, config):
-            pass  # Already set in __init__
-
-    return MockAPIClient
-
-
 async def test_step_user_shows_menu(hass: HomeAssistant) -> None:
     """The initial user step should present a menu."""
     result = await hass.config_entries.flow.async_init(DOMAIN, context={"source": config_entries.SOURCE_USER})
@@ -96,9 +82,9 @@ async def test_up_login_eleve_success(hass: HomeAssistant) -> None:
     )
 
     mock_client = _make_eleve_client("Jean Dupont")
-    MockAPIClient = _create_mock_api_client(mock_client)
+    mock_creds = _make_credentials()
 
-    with patch("custom_components.pronote.config_flow.PronoteAPIClient", MockAPIClient):
+    with patch("custom_components.pronote.api.auth.PronoteAuth.authenticate", return_value=(mock_client, mock_creds)):
         result = await hass.config_entries.flow.async_configure(
             result["flow_id"],
             UP_ELEVE_INPUT,
@@ -117,9 +103,9 @@ async def test_up_login_full_flow(hass: HomeAssistant) -> None:
     )
 
     mock_client = _make_eleve_client("Jean Dupont")
-    MockAPIClient = _create_mock_api_client(mock_client)
+    mock_creds = _make_credentials()
 
-    with patch("custom_components.pronote.config_flow.PronoteAPIClient", MockAPIClient):
+    with patch("custom_components.pronote.api.auth.PronoteAuth.authenticate", return_value=(mock_client, mock_creds)):
         result = await hass.config_entries.flow.async_configure(
             result["flow_id"],
             UP_ELEVE_INPUT,
@@ -165,9 +151,8 @@ async def test_qr_login_eleve_success(hass: HomeAssistant) -> None:
 
     mock_client = _make_qr_client("Jean Dupont")
     mock_creds = _make_credentials()
-    MockAPIClient = _create_mock_api_client(mock_client, mock_creds)
 
-    with patch("custom_components.pronote.config_flow.PronoteAPIClient", MockAPIClient):
+    with patch("custom_components.pronote.api.auth.PronoteAuth.authenticate", return_value=(mock_client, mock_creds)):
         result = await hass.config_entries.flow.async_configure(
             result["flow_id"],
             QR_ELEVE_INPUT,
@@ -187,9 +172,8 @@ async def test_qr_login_full_flow(hass: HomeAssistant) -> None:
 
     mock_client = _make_qr_client("Jean Dupont")
     mock_creds = _make_credentials()
-    MockAPIClient = _create_mock_api_client(mock_client, mock_creds)
 
-    with patch("custom_components.pronote.config_flow.PronoteAPIClient", MockAPIClient):
+    with patch("custom_components.pronote.api.auth.PronoteAuth.authenticate", return_value=(mock_client, mock_creds)):
         result = await hass.config_entries.flow.async_configure(
             result["flow_id"],
             QR_ELEVE_INPUT,
@@ -249,9 +233,9 @@ async def test_reauth_up_success(hass: HomeAssistant) -> None:
     result = await entry.start_reauth_flow(hass)
 
     mock_client = _make_eleve_client("Jean Dupont")
-    MockAPIClient = _create_mock_api_client(mock_client)
+    mock_creds = _make_credentials()
 
-    with patch("custom_components.pronote.config_flow.PronoteAPIClient", MockAPIClient):
+    with patch("custom_components.pronote.api.auth.PronoteAuth.authenticate", return_value=(mock_client, mock_creds)):
         result = await hass.config_entries.flow.async_configure(
             result["flow_id"],
             {"password": "new_password"},
@@ -314,9 +298,8 @@ async def test_reauth_qr_success(hass: HomeAssistant) -> None:
 
     mock_client = _make_qr_client("Jean Dupont")
     mock_creds = _make_credentials()
-    MockAPIClient = _create_mock_api_client(mock_client, mock_creds)
 
-    with patch("custom_components.pronote.config_flow.PronoteAPIClient", MockAPIClient):
+    with patch("custom_components.pronote.api.auth.PronoteAuth.authenticate", return_value=(mock_client, mock_creds)):
         result = await hass.config_entries.flow.async_configure(
             result["flow_id"],
             {
