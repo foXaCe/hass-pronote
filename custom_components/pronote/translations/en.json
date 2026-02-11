@@ -109,5 +109,26 @@
                 }
             }
         }
+    },
+    "issues": {
+        "session_expired": {
+            "title": "Pronote session expired for {child_name}",
+            "fix_flow": {
+                "step": {
+                    "reauth": {
+                        "title": "Re-authenticate",
+                        "description": "Your Pronote session has expired. Please re-enter your credentials to restore access."
+                    }
+                }
+            }
+        },
+        "rate_limited": {
+            "title": "Pronote API rate limited for {child_name}",
+            "description": "Too many requests have been made to the Pronote API. The integration will automatically retry after the rate limit period expires."
+        },
+        "connection_error": {
+            "title": "Pronote connection error for {child_name}",
+            "description": "Unable to connect to Pronote servers. This may be due to network issues or server maintenance. The integration will automatically retry."
+        }
     }
 }

@@ -21,6 +21,13 @@ from .api import (
     PronoteAPIClient,
     RateLimitError,
 )
+from .repairs import (
+    async_create_connection_error_issue,
+    async_create_rate_limited_issue,
+    async_create_session_expired_issue,
+    async_delete_all_issues,
+    async_delete_issue_for_entry,
+)
 from .const import (
     DEFAULT_ALARM_OFFSET,
     DEFAULT_REFRESH_INTERVAL,
@@ -75,26 +82,33 @@ class PronoteDataUpdateCoordinator(TimestampDataUpdateCoordinator):
         # Authentication
         try:
             await self._api_client.authenticate(connection_type, config_data)
+            # Clear any transient issues after successful auth
+            async_delete_issue_for_entry(self.hass, self.config_entry, "connection_error")
+            async_delete_issue_for_entry(self.hass, self.config_entry, "rate_limited")
         except AuthenticationError as err:
+            async_create_session_expired_issue(self.hass, self.config_entry)
             raise ConfigEntryAuthFailed(f"Authentication failed with Pronote: {err}") from err
         except RateLimitError as err:
+            async_create_rate_limited_issue(self.hass, self.config_entry, err.retry_after)
             # Honor retry_after from rate limiting (HTTP 429)
             raise UpdateFailed(
                 f"Rate limited by Pronote: {err}",
                 retry_after=err.retry_after,
             ) from err
         except CircuitBreakerOpenError as err:
-            # Circuit breaker open - wait for recovery
+            # Circuit breaker open - wait for recovery (no repair, transient)
             raise UpdateFailed(
                 f"Pronote API temporarily unavailable: {err}",
                 retry_after=300,  # 5 minutes default recovery
             ) from err
         except ConnectionError as err:
+            async_create_connection_error_issue(self.hass, self.config_entry, str(err))
             raise UpdateFailed(f"Connection error with Pronote: {err}") from err
         except Exception as err:
             raise UpdateFailed(f"Error authenticating with Pronote: {err}") from err
 
         if not self._api_client.is_authenticated():
+            async_create_session_expired_issue(self.hass, self.config_entry)
             raise ConfigEntryAuthFailed("Unable to authenticate with Pronote")
 
         # Fetch all data
@@ -105,16 +119,22 @@ class PronoteDataUpdateCoordinator(TimestampDataUpdateCoordinator):
                 homework_max_days=HOMEWORK_MAX_DAYS,
                 info_survey_max_days=INFO_SURVEY_LIMIT_MAX_DAYS,
             )
+            # Clear all transient issues after successful fetch
+            async_delete_issue_for_entry(self.hass, self.config_entry, "connection_error")
+            async_delete_issue_for_entry(self.hass, self.config_entry, "rate_limited")
         except RateLimitError as err:
+            async_create_rate_limited_issue(self.hass, self.config_entry, err.retry_after)
             raise UpdateFailed(
                 f"Rate limited by Pronote: {err}",
                 retry_after=err.retry_after,
             ) from err
         except AuthenticationError as err:
+            async_create_session_expired_issue(self.hass, self.config_entry)
             raise ConfigEntryAuthFailed(f"Session expired: {err}") from err
         except InvalidResponseError as err:
             raise UpdateFailed(f"Invalid response from Pronote: {err}") from err
         except ConnectionError as err:
+            async_create_connection_error_issue(self.hass, self.config_entry, str(err))
             raise UpdateFailed(f"Connection error: {err}") from err
         except Exception as err:
             raise UpdateFailed(f"Error fetching data from Pronote: {err}") from err
