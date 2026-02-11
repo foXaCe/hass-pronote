@@ -109,5 +109,26 @@
                 }
             }
         }
+    },
+    "issues": {
+        "session_expired": {
+            "title": "Sessão Pronote expirada para {child_name}",
+            "fix_flow": {
+                "step": {
+                    "reauth": {
+                        "title": "Re-autenticação",
+                        "description": "A sua sessão Pronote expirou. Por favor, insira novamente as suas credenciais para restaurar o acesso."
+                    }
+                }
+            }
+        },
+        "rate_limited": {
+            "title": "Limite de pedidos API Pronote atingido para {child_name}",
+            "description": "Foram efetuados demasiados pedidos à API Pronote. A integração irá tentar novamente automaticamente após o período de limitação."
+        },
+        "connection_error": {
+            "title": "Erro de ligação Pronote para {child_name}",
+            "description": "Não foi possível ligar aos servidores Pronote. Isto pode dever-se a problemas de rede ou manutenção do servidor. A integração irá tentar novamente automaticamente."
+        }
     }
 }
