@@ -3,8 +3,6 @@
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
-import pronotepy.exceptions
-import pytest
 from homeassistant import config_entries
 from homeassistant.core import HomeAssistant
 from homeassistant.data_entry_flow import FlowResultType
@@ -69,6 +67,7 @@ def _make_credentials():
 
 def _create_mock_api_client(mock_client, mock_creds=None):
     """Create a mock API client class."""
+
     class MockAPIClient:
         def __init__(self, hass=None):
             self._client = mock_client

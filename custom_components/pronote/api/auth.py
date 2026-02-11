@@ -91,9 +91,7 @@ class PronoteAuth:
             url += "?login=true"
 
         try:
-            client_class = (
-                pronotepy.ParentClient if account_type == "parent" else pronotepy.Client
-            )
+            client_class = pronotepy.ParentClient if account_type == "parent" else pronotepy.Client
             client = client_class(
                 pronote_url=url,
                 username=data["username"],
@@ -136,9 +134,7 @@ class PronoteAuth:
         account_type: str,
     ) -> tuple[pronotepy.Client | pronotepy.ParentClient, Credentials]:
         """Authentification par QR code ou token."""
-        client_class = (
-            pronotepy.ParentClient if account_type == "parent" else pronotepy.Client
-        )
+        client_class = pronotepy.ParentClient if account_type == "parent" else pronotepy.Client
 
         # Préférence: token_login si credentials déjà sauvegardés
         if "qr_code_url" in data and "qr_code_username" in data:

@@ -141,9 +141,7 @@ class PronoteSessionExpiredRepairFlow(RepairsFlow):
         super().__init__(issue_id, data)
         self._entry_id = data.get("entry_id") if data else None
 
-    async def async_step_init(
-        self, user_input: dict[str, str] | None = None
-    ) -> data_entry_flow.FlowResult:
+    async def async_step_init(self, user_input: dict[str, str] | None = None) -> data_entry_flow.FlowResult:
         """Handle the initial step - redirect to reauth."""
         if self._entry_id is None:
             return self.async_abort(reason="no_entry")
@@ -155,9 +153,7 @@ class PronoteSessionExpiredRepairFlow(RepairsFlow):
         # Redirect to the re-authentication flow
         return await self.async_step_reauth()
 
-    async def async_step_reauth(
-        self, user_input: dict[str, str] | None = None
-    ) -> data_entry_flow.FlowResult:
+    async def async_step_reauth(self, user_input: dict[str, str] | None = None) -> data_entry_flow.FlowResult:
         """Handle re-authentication."""
         if user_input is None:
             # Show confirmation form
@@ -184,9 +180,7 @@ class PronoteSessionExpiredRepairFlow(RepairsFlow):
             _LOGGER.error("Re-authentication failed: %s", err)
             return self.async_abort(reason="reauth_failed")
 
-    async def async_step_confirm(
-        self, user_input: dict[str, str] | None = None
-    ) -> data_entry_flow.FlowResult:
+    async def async_step_confirm(self, user_input: dict[str, str] | None = None) -> data_entry_flow.FlowResult:
         """Confirm the repair."""
         return self.async_create_fix_result()
 

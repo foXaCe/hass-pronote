@@ -1,6 +1,6 @@
 """Tests for the Pronote API client."""
 
-from datetime import date, datetime, timedelta
+from datetime import date, datetime
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
@@ -9,8 +9,6 @@ import pytest
 from custom_components.pronote.api import (
     AuthenticationError,
     CircuitBreakerOpenError,
-    ConnectionError,
-    InvalidResponseError,
     Lesson,
     PronoteAPIClient,
     RateLimitError,
@@ -91,9 +89,7 @@ class TestPronoteAPIClient:
         client = PronoteAPIClient()
         mock_pronotepy_client = MagicMock()
 
-        with patch.object(
-            PronoteAuth, "authenticate", return_value=(mock_pronotepy_client, MagicMock())
-        ):
+        with patch.object(PronoteAuth, "authenticate", return_value=(mock_pronotepy_client, MagicMock())):
             await client.authenticate("username_password", {})
 
         assert client.is_authenticated()
@@ -103,16 +99,13 @@ class TestPronoteAPIClient:
         """Test that AuthenticationError is propagated."""
         client = PronoteAPIClient()
 
-        with patch.object(
-            PronoteAuth, "authenticate", side_effect=AuthenticationError("Invalid credentials")
-        ):
+        with patch.object(PronoteAuth, "authenticate", side_effect=AuthenticationError("Invalid credentials")):
             with pytest.raises(AuthenticationError):
                 await client.authenticate("username_password", {})
 
     @pytest.mark.asyncio
     async def test_circuit_breaker_opens_after_failures(self):
         """Test that circuit breaker opens after repeated failures."""
-        from custom_components.pronote.api.exceptions import ConnectionError as APIConnectionError
 
         client = PronoteAPIClient()
         client._circuit_breaker.failure_threshold = 3  # Lower threshold for test

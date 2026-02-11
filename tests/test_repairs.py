@@ -1,6 +1,6 @@
 """Tests for the Pronote repairs module."""
 
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import pytest
 from pytest_homeassistant_custom_component.common import MockConfigEntry

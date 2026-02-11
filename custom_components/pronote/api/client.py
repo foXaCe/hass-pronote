@@ -19,8 +19,6 @@ from .exceptions import (
     ConnectionError,
     InvalidResponseError,
     PronoteAPIError,
-    RateLimitError,
-    SessionExpiredError,
 )
 from .models import (
     Absence,
@@ -111,9 +109,7 @@ class PronoteAPIClient:
             CircuitBreakerOpenError: Si circuit breaker ouvert
         """
         if self._circuit_breaker.is_open:
-            raise CircuitBreakerOpenError(
-                "Trop d'échecs récents, attente de récupération"
-            )
+            raise CircuitBreakerOpenError("Trop d'échecs récents, attente de récupération")
 
         self._connection_type = connection_type
         self._config_data = config_data
@@ -122,9 +118,7 @@ class PronoteAPIClient:
             # Exécution dans l'executor car pronotepy est synchrone
             if self.hass:
                 client, creds = await asyncio.wait_for(
-                    self.hass.async_add_executor_job(
-                        self._auth.authenticate, connection_type, config_data
-                    ),
+                    self.hass.async_add_executor_job(self._auth.authenticate, connection_type, config_data),
                     timeout=self.timeout,
                 )
             else:
@@ -134,7 +128,7 @@ class PronoteAPIClient:
             self._credentials = creds
             self._circuit_breaker.record_success()
 
-        except asyncio.TimeoutError as err:
+        except TimeoutError as err:
             self._circuit_breaker.record_failure()
             raise ConnectionError(f"Timeout authentification ({self.timeout}s)") from err
         except PronoteAPIError:
@@ -175,9 +169,7 @@ class PronoteAPIClient:
             raise AuthenticationError("Client non authentifié")
 
         if self._circuit_breaker.is_open:
-            raise CircuitBreakerOpenError(
-                "Trop d'échecs récents, attente de récupération"
-            )
+            raise CircuitBreakerOpenError("Trop d'échecs récents, attente de récupération")
 
         if today is None:
             today = date.today()
@@ -206,7 +198,7 @@ class PronoteAPIClient:
             self._circuit_breaker.record_success()
             return data
 
-        except asyncio.TimeoutError as err:
+        except TimeoutError as err:
             self._circuit_breaker.record_failure()
             raise ConnectionError(f"Timeout fetch ({self.timeout}s)") from err
         except PronoteAPIError:
@@ -249,9 +241,7 @@ class PronoteAPIClient:
         lessons_today = self._safe_get_lessons(client, today)
         lessons_tomorrow = self._safe_get_lessons(client, today + timedelta(days=1))
         lessons_period = self._get_lessons_period(client, today, lesson_max_days)
-        lessons_next_day = self._get_next_day_lessons(
-            client, today, lessons_tomorrow, lesson_max_days
-        )
+        lessons_next_day = self._get_next_day_lessons(client, today, lessons_tomorrow, lesson_max_days)
 
         # Période courante
         current_period = getattr(client, "current_period", None)
@@ -298,9 +288,7 @@ class PronoteAPIClient:
                     p_key = slugify(period.name, separator="_")
 
                     # Récupération données période précédente (dans executor)
-                    raw_period = next(
-                        (p for p in client.periods if p.name == period.name), None
-                    )
+                    raw_period = next((p for p in client.periods if p.name == period.name), None)
                     if raw_period:
                         previous_period_data[f"grades_{p_key}"] = self._safe_get_period_data(
                             raw_period, "grades", Grade
@@ -320,9 +308,7 @@ class PronoteAPIClient:
                         previous_period_data[f"punishments_{p_key}"] = self._safe_get_period_data(
                             raw_period, "punishments", Punishment
                         )
-                        previous_period_data[f"overall_average_{p_key}"] = self._safe_get_overall_average(
-                            raw_period
-                        )
+                        previous_period_data[f"overall_average_{p_key}"] = self._safe_get_overall_average(raw_period)
 
         active_periods = previous_periods + ([period_info] if period_info else [])
 
@@ -366,23 +352,19 @@ class PronoteAPIClient:
             password=password,
         )
 
-    def _safe_get_lessons(
-        self, client, day: date
-    ) -> list[Lesson] | None:
+    def _safe_get_lessons(self, client, day: date) -> list[Lesson] | None:
         """Récupère les cours d'un jour avec gestion d'erreur."""
         try:
             lessons = client.lessons(day)
             return sorted(
-                [self._convert_lesson(l) for l in lessons],
+                [self._convert_lesson(lesson) for lesson in lessons],
                 key=lambda x: x.start,
             )
         except Exception as err:
             _LOGGER.debug("Erreur récupération cours %s: %s", day, err)
             return None
 
-    def _get_lessons_period(
-        self, client, today: date, max_days: int
-    ) -> list[Lesson] | None:
+    def _get_lessons_period(self, client, today: date, max_days: int) -> list[Lesson] | None:
         """Recherche les cours sur une période avec fallback."""
         delta = max_days
         while delta > 0:
@@ -424,9 +406,7 @@ class PronoteAPIClient:
             delta += 1
         return None
 
-    def _safe_get_period_data(
-        self, period, attr: str, converter: Callable[[Any], T]
-    ) -> list[T] | None:
+    def _safe_get_period_data(self, period, attr: str, converter: Callable[[Any], T]) -> list[T] | None:
         """Récupère les données d'une période avec conversion."""
         try:
             items = getattr(period, attr, None)
@@ -451,9 +431,7 @@ class PronoteAPIClient:
             _LOGGER.debug("Erreur moyenne générale: %s", err)
             return None
 
-    def _safe_get_homework(
-        self, client, start: date, end: date | None = None
-    ) -> list[Homework] | None:
+    def _safe_get_homework(self, client, start: date, end: date | None = None) -> list[Homework] | None:
         """Récupère les devoirs."""
         try:
             if end:
@@ -468,14 +446,10 @@ class PronoteAPIClient:
             _LOGGER.debug("Erreur devoirs: %s", err)
             return None
 
-    def _safe_get_info_surveys(
-        self, client, today: date, max_days: int
-    ) -> list[InformationSurvey] | None:
+    def _safe_get_info_surveys(self, client, today: date, max_days: int) -> list[InformationSurvey] | None:
         """Récupère les informations et sondages."""
         try:
-            date_from = datetime.combine(
-                today - timedelta(days=max_days), datetime.min.time()
-            )
+            date_from = datetime.combine(today - timedelta(days=max_days), datetime.min.time())
             items = client.information_and_surveys(date_from)
             return sorted(
                 [self._convert_info_survey(i) for i in items],

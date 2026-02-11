@@ -33,6 +33,8 @@ from .models import (
 __all__ = [
     # Client
     "PronoteAPIClient",
+    # Circuit Breaker
+    "CircuitBreaker",
     # Exceptions
     "AuthenticationError",
     "CircuitBreakerOpenError",

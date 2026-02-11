@@ -21,13 +21,6 @@ from .api import (
     PronoteAPIClient,
     RateLimitError,
 )
-from .repairs import (
-    async_create_connection_error_issue,
-    async_create_rate_limited_issue,
-    async_create_session_expired_issue,
-    async_delete_all_issues,
-    async_delete_issue_for_entry,
-)
 from .const import (
     DEFAULT_ALARM_OFFSET,
     DEFAULT_REFRESH_INTERVAL,
@@ -35,10 +28,15 @@ from .const import (
     HOMEWORK_MAX_DAYS,
     INFO_SURVEY_LIMIT_MAX_DAYS,
     LESSON_MAX_DAYS,
-    LESSON_NEXT_DAY_SEARCH_LIMIT,
     PronoteConfigEntry,
 )
 from .pronote_formatter import format_absence, format_delay, format_evaluation, format_grade
+from .repairs import (
+    async_create_connection_error_issue,
+    async_create_rate_limited_issue,
+    async_create_session_expired_issue,
+    async_delete_issue_for_entry,
+)
 
 _LOGGER = logging.getLogger(__name__)
 
