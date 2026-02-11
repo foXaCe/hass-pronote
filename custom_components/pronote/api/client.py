@@ -373,7 +373,7 @@ class PronoteAPIClient:
                 if lessons:
                     _LOGGER.debug("Cours trouvés à %s jours", delta)
                     return sorted(
-                        [self._convert_lesson(l) for l in lessons],
+                        [self._convert_lesson(lesson) for lesson in lessons],
                         key=lambda x: x.start,
                     )
             except Exception as err:
@@ -398,7 +398,7 @@ class PronoteAPIClient:
                 lessons = client.lessons(today + timedelta(days=delta))
                 if lessons:
                     return sorted(
-                        [self._convert_lesson(l) for l in lessons],
+                        [self._convert_lesson(lesson) for lesson in lessons],
                         key=lambda x: x.start,
                     )
             except Exception:
