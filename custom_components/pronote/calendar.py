@@ -8,6 +8,7 @@ from zoneinfo import ZoneInfo
 from homeassistant.components.calendar import CalendarEntity, CalendarEvent
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
+from homeassistant.util import dt as dt_util
 
 from .const import DOMAIN, PronoteConfigEntry
 from .coordinator import PronoteDataUpdateCoordinator
@@ -15,6 +16,11 @@ from .entity import PronoteEntity
 from .pronote_formatter import format_displayed_lesson
 
 PARALLEL_UPDATES = 0
+
+
+def _ensure_aware(dt: datetime, tz: ZoneInfo) -> datetime:
+    """Ensure a datetime is timezone-aware."""
+    return dt.replace(tzinfo=tz) if dt.tzinfo is None else dt
 
 
 async def async_setup_entry(
@@ -39,10 +45,10 @@ def async_get_calendar_event_from_lessons(lesson, timezone) -> CalendarEvent:
 
     return CalendarEvent(
         summary=lesson_name,
-        description=f"{lesson.teacher_name} - Salle {lesson.classroom}",
-        location=f"Salle {lesson.classroom}",
-        start=lesson.start.replace(tzinfo=tz),
-        end=lesson.end.replace(tzinfo=tz),
+        description=f"{lesson.teacher} - Salle {lesson.room}",
+        location=f"Salle {lesson.room}" if lesson.room else None,
+        start=_ensure_aware(lesson.start, tz),
+        end=_ensure_aware(lesson.end, tz),
     )
 
 
@@ -79,9 +85,12 @@ class PronoteCalendar(PronoteEntity, CalendarEntity):
         if not lessons:
             self._event = None
         else:
-            now = datetime.now()
+            now = dt_util.now()
+            tz = ZoneInfo(self.hass.config.time_zone)
             try:
-                current_event = next(event for event in lessons if event.start <= now < event.end)
+                current_event = next(
+                    event for event in lessons if _ensure_aware(event.start, tz) <= now < _ensure_aware(event.end, tz)
+                )
             except StopIteration:
                 self._event = None
             else:
@@ -99,8 +108,11 @@ class PronoteCalendar(PronoteEntity, CalendarEntity):
         lessons = self.coordinator.data.get("lessons_period")
         if not lessons:
             return []
+        tz = ZoneInfo(hass.config.time_zone)
         return [
             async_get_calendar_event_from_lessons(event, hass.config.time_zone)
             for event in lessons
-            if not event.canceled and event.end >= start_date and event.start < end_date
+            if not event.canceled
+            and _ensure_aware(event.end, tz) >= start_date
+            and _ensure_aware(event.start, tz) < end_date
         ]
