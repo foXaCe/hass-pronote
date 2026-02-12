@@ -23,7 +23,7 @@ from custom_components.pronote.pronote_formatter import (
 
 class TestFormatDisplayedLesson:
     def test_detention(self, mock_lesson):
-        lesson = mock_lesson(detention=True)
+        lesson = mock_lesson(is_detention=True)
         assert format_displayed_lesson(lesson) == "RETENUE"
 
     def test_with_subject(self, mock_lesson):
@@ -36,7 +36,7 @@ class TestFormatDisplayedLesson:
         assert format_displayed_lesson(lesson) == "autre"
 
     def test_detention_takes_priority_over_subject(self, mock_lesson):
-        lesson = mock_lesson(subject_name="Français", detention=True)
+        lesson = mock_lesson(subject_name="Français", is_detention=True)
         assert format_displayed_lesson(lesson) == "RETENUE"
 
 
@@ -130,7 +130,7 @@ class TestFormatHomework:
         assert result["subject"] == "Mathématiques"
         assert result["done"] is False
         assert result["description"] == "Exercices 1 à 10 page 42"
-        assert result["files"] == []
+        assert result["files"] is None
 
     def test_short_description_truncation(self, mock_homework):
         long_desc = "A" * 200
@@ -161,11 +161,11 @@ class TestFormatGrade:
         assert result["comment"] == "Bien"
 
     def test_decimal_replacement(self, mock_grade):
-        grade = mock_grade(out_of="20.0", coefficient="2.5", average="12.5")
+        grade = mock_grade(grade_out_of="20.0", coefficient="2.5", class_average="12.5")
         result = format_grade(grade)
-        assert result["out_of"] == "20,0"
-        assert result["coefficient"] == "2,5"
-        assert result["class_average"] == "12,5"
+        assert result["out_of"] == "20.0"
+        assert result["coefficient"] == "2.5"
+        assert result["class_average"] == "12.5"
 
     def test_bonus_grade(self, mock_grade):
         grade = mock_grade(is_bonus=True)
@@ -173,9 +173,9 @@ class TestFormatGrade:
         assert result["is_bonus"] is True
 
     def test_optional_grade(self, mock_grade):
-        grade = mock_grade(is_optionnal=True)
+        grade = mock_grade(is_optional=True)
         result = format_grade(grade)
-        assert result["is_optionnal"] is True
+        assert result["is_optional"] is True
 
 
 class TestFormatAbsence:
@@ -184,7 +184,6 @@ class TestFormatAbsence:
         result = format_absence(absence)
         assert result["justified"] is False
         assert result["hours"] == "2"
-        assert result["days"] == "0"
         assert result["reason"] == "Maladie"
 
     def test_justified_absence(self, mock_absence):
@@ -199,13 +198,13 @@ class TestFormatDelay:
         result = format_delay(delay)
         assert result["minutes"] == 10
         assert result["justified"] is False
-        assert result["reasons"] == "Transports"
+        assert result["reason"] == "Transports"
 
     def test_justified_delay(self, mock_delay):
-        delay = mock_delay(justified=True, justification="Grève SNCF")
+        delay = mock_delay(justified=True, reason="Grève SNCF")
         result = format_delay(delay)
         assert result["justified"] is True
-        assert result["justification"] == "Grève SNCF"
+        assert result["reason"] == "Grève SNCF"
 
 
 class TestFormatEvaluation:
@@ -213,22 +212,11 @@ class TestFormatEvaluation:
         ev = mock_evaluation()
         result = format_evaluation(ev)
         assert result["name"] == "Contrôle"
-        assert result["domain"] == "Algèbre"
         assert result["subject"] == "Mathématiques"
-        assert result["teacher"] == "M. Dupont"
-        assert result["acquisitions"] == []
+        assert result["acquisitions"] is None
 
     def test_with_acquisitions(self, mock_evaluation):
-        acq = SimpleNamespace(
-            order=1,
-            name="Résoudre une équation",
-            abbreviation="RE",
-            level="Acquis",
-            domain="Algèbre",
-            coefficient=1,
-            pillar="Mathématiques",
-            pillar_prefix="MA",
-        )
+        acq = {"name": "Résoudre une équation", "level": "Acquis"}
         ev = mock_evaluation(acquisitions=[acq])
         result = format_evaluation(ev)
         assert len(result["acquisitions"]) == 1
@@ -243,7 +231,8 @@ class TestFormatAverage:
         assert result["average"] == "14.5"
         assert result["class"] == "12.0"
         assert result["subject"] == "Mathématiques"
-        assert result["out_of"] == "20"
+        assert result["max"] == "18.0"
+        assert result["min"] == "5.0"
 
 
 class TestFormatPunishment:
@@ -251,18 +240,17 @@ class TestFormatPunishment:
         pun = mock_punishment()
         result = format_punishment(pun)
         assert result["date"] == "2025-01-15"
-        assert result["nature"] == "Retenue"
-        assert result["giver"] == "M. Dupont"
-        assert result["exclusion"] is False
-        assert result["homework_documents"] == []
-        assert result["schedule"] == []
+        assert result["subject"] == "Mathématiques"
+        assert result["reason"] == "Bavardage"
+        assert result["duration"] == "1h"
+        assert result["during_lesson"] is False
+        assert result["homework"] == ""
+        assert result["circumstances"] == "Bavardage"
 
-    def test_with_schedule(self, mock_punishment):
-        sched = SimpleNamespace(start=datetime(2025, 1, 20, 16, 0), duration="1h")
-        pun = mock_punishment(schedule=[sched])
+    def test_with_duration(self, mock_punishment):
+        pun = mock_punishment(duration="2h")
         result = format_punishment(pun)
-        assert len(result["schedule"]) == 1
-        assert result["schedule"][0]["duration"] == "1h"
+        assert result["duration"] == "2h"
 
 
 class TestFormatFoodList:

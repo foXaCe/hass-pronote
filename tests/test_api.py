@@ -124,7 +124,7 @@ class TestPronoteAuth:
         result = auth.refresh_credentials(mock_client)
         assert result is None
 
-    def test_authenticate_raises_on_none_client(self):
+    async def test_authenticate_raises_on_none_client(self):
         """Test authenticate raises error when client is None."""
         from unittest.mock import patch
 
@@ -132,16 +132,16 @@ class TestPronoteAuth:
 
         with patch.object(auth, "_auth_username_password", return_value=(None, None)):
             with pytest.raises(AuthenticationError, match="Client Pronote non créé"):
-                auth.authenticate(
+                await auth.authenticate(
                     "username_password", {"url": "https://example.com", "username": "test", "password": "pass"}
                 )
 
-    def test_authenticate_with_qrcode_missing_json(self):
+    async def test_authenticate_with_qrcode_missing_json(self):
         """Test authenticate raises error when QR code JSON is missing."""
         auth = PronoteAuth()
 
         with pytest.raises(AuthenticationError, match="Aucun QR code ou token sauvegardé"):
-            auth.authenticate("qrcode", {"account_type": "student"})
+            await auth.authenticate("qrcode", {"account_type": "student"})
 
 
 class TestPronoteAPIClient:
@@ -915,14 +915,14 @@ class TestPronoteAPIClientSafeGetSuccess:
         assert result[0].name == "Trimestre 1"
 
     def test_safe_get_overall_average_success(self):
-        """Test _safe_get_overall_average returns average."""
+        """Test _safe_get_overall_average returns average as float."""
         client = PronoteAPIClient()
         mock_period = MagicMock()
         mock_period.overall_average = "15.5"
 
         result = client._safe_get_overall_average(mock_period)
 
-        assert result == "15.5"
+        assert result == 15.5
 
 
 class TestPronoteAPIClientFetchAllDataSync:
@@ -1072,7 +1072,7 @@ class TestPronoteAPIClientPronoteAPIError:
 class TestPronoteAuthExceptions:
     """Tests for PronoteAuth exception handling."""
 
-    def test_authenticate_raises_crypto_error(self):
+    async def test_authenticate_raises_crypto_error(self):
         """Test authenticate raises AuthenticationError on CryptoError."""
         from pronotepy import CryptoError
 
@@ -1080,11 +1080,11 @@ class TestPronoteAuthExceptions:
 
         with patch.object(auth, "_auth_username_password", side_effect=CryptoError("Crypto failed")):
             with pytest.raises(AuthenticationError, match="Cryptographie/QR code invalide"):
-                auth.authenticate(
+                await auth.authenticate(
                     "username_password", {"url": "https://example.com", "username": "test", "password": "pass"}
                 )
 
-    def test_authenticate_raises_ent_login_error(self):
+    async def test_authenticate_raises_ent_login_error(self):
         """Test authenticate raises AuthenticationError on ENTLoginError."""
         from pronotepy import ENTLoginError
 
@@ -1092,11 +1092,11 @@ class TestPronoteAuthExceptions:
 
         with patch.object(auth, "_auth_username_password", side_effect=ENTLoginError("ENT failed")):
             with pytest.raises(AuthenticationError, match="Échec login ENT"):
-                auth.authenticate(
+                await auth.authenticate(
                     "username_password", {"url": "https://example.com", "username": "test", "password": "pass"}
                 )
 
-    def test_authenticate_raises_connection_error(self):
+    async def test_authenticate_raises_connection_error(self):
         """Test authenticate propagates ConnectionError."""
         from custom_components.pronote.api import ConnectionError as PronoteConnectionError
 
@@ -1104,18 +1104,18 @@ class TestPronoteAuthExceptions:
 
         with patch.object(auth, "_auth_username_password", side_effect=PronoteConnectionError("Network failed")):
             with pytest.raises(PronoteConnectionError, match="Erreur réseau"):
-                auth.authenticate(
+                await auth.authenticate(
                     "username_password", {"url": "https://example.com", "username": "test", "password": "pass"}
                 )
 
-    def test_authenticate_session_check_fails(self):
+    async def test_authenticate_session_check_fails(self):
         """Test authenticate continues when session_check fails."""
         auth = PronoteAuth()
         mock_client = MagicMock()
         mock_client.session_check.side_effect = Exception("Session check failed")
 
         with patch.object(auth, "_auth_username_password", return_value=(mock_client, MagicMock())):
-            client, creds = auth.authenticate(
+            client, creds = await auth.authenticate(
                 "username_password", {"url": "https://example.com", "username": "test", "password": "pass"}
             )
 
@@ -1239,7 +1239,7 @@ class TestPronoteAuthQRCode:
 class TestPronoteAuthAdditionalCoverage:
     """Additional tests to reach 95% coverage for auth.py."""
 
-    def test_authenticate_session_check_failure_continues(self):
+    async def test_authenticate_session_check_failure_continues(self):
         """Test authenticate continues even if session_check fails."""
         auth = PronoteAuth()
         mock_client = MagicMock()
@@ -1247,7 +1247,7 @@ class TestPronoteAuthAdditionalCoverage:
         mock_creds = MagicMock()
 
         with patch.object(auth, "_auth_username_password", return_value=(mock_client, mock_creds)):
-            client, creds = auth.authenticate(
+            client, creds = await auth.authenticate(
                 "username_password",
                 {
                     "url": "https://example.com",

@@ -77,6 +77,8 @@ class TestPronoteDataUpdateCoordinator:
             coord._api_client.fetch_all_data = AsyncMock()
             coord._api_client.is_authenticated = MagicMock(return_value=True)
             coord.logger = MagicMock()
+            coord._previous_period_cache = None
+            coord._previous_period_cache_date = None
         return coord
 
     @pytest.mark.asyncio
@@ -119,7 +121,8 @@ class TestPronoteDataUpdateCoordinator:
         assert result is not None
         assert result["child_info"].name == "Test Student"
         assert result["sensor_prefix"] == "test_student"
-        mock_coordinator._api_client.authenticate.assert_called_once()
+        # is_authenticated returns True, so authenticate is NOT called
+        mock_coordinator._api_client.authenticate.assert_not_called()
         mock_coordinator._api_client.fetch_all_data.assert_called_once()
 
     @pytest.mark.asyncio
@@ -127,6 +130,7 @@ class TestPronoteDataUpdateCoordinator:
         """Test authentication error handling."""
         from custom_components.pronote.api import AuthenticationError
 
+        mock_coordinator._api_client.is_authenticated.return_value = False
         mock_coordinator._api_client.authenticate.side_effect = AuthenticationError("Invalid credentials")
 
         with patch("custom_components.pronote.coordinator.async_create_session_expired_issue") as mock_create:
@@ -140,6 +144,7 @@ class TestPronoteDataUpdateCoordinator:
         """Test rate limit error handling."""
         from custom_components.pronote.api import RateLimitError
 
+        mock_coordinator._api_client.is_authenticated.return_value = False
         mock_coordinator._api_client.authenticate.side_effect = RateLimitError("Rate limited", retry_after=60)
 
         with patch("custom_components.pronote.coordinator.async_create_rate_limited_issue") as mock_create:
@@ -153,6 +158,7 @@ class TestPronoteDataUpdateCoordinator:
         """Test circuit breaker open error handling."""
         from custom_components.pronote.api import CircuitBreakerOpenError
 
+        mock_coordinator._api_client.is_authenticated.return_value = False
         mock_coordinator._api_client.authenticate.side_effect = CircuitBreakerOpenError("Circuit open")
 
         with pytest.raises(UpdateFailed, match="temporarily unavailable"):
@@ -163,6 +169,7 @@ class TestPronoteDataUpdateCoordinator:
         """Test connection error handling during auth."""
         from custom_components.pronote.api import ConnectionError
 
+        mock_coordinator._api_client.is_authenticated.return_value = False
         mock_coordinator._api_client.authenticate.side_effect = ConnectionError("Network error")
 
         with patch("custom_components.pronote.coordinator.async_create_connection_error_issue") as mock_create:
@@ -350,6 +357,8 @@ class TestCompareAndFireEvents:
                 "child_info": SimpleNamespace(name="Test Student"),
                 "sensor_prefix": "test_student",
             }
+            coord._previous_period_cache = None
+            coord._previous_period_cache_date = None
         return coord
 
     def test_compare_data_no_previous(self, mock_coordinator):
@@ -374,38 +383,30 @@ class TestCompareAndFireEvents:
     def test_compare_data_fires_event_for_new_items(self, mock_coordinator):
         """Test _compare_data fires events for new items."""
         with patch.object(mock_coordinator, "_trigger_event") as mock_trigger:
-            # Use SimpleNamespace to mock pronotepy objects with nested attributes
+            # Use SimpleNamespace to mock Grade model objects
             grade1 = SimpleNamespace(
                 id="g1",
                 date=date(2025, 1, 15),
-                subject=SimpleNamespace(name="Math"),
+                subject="Math",
                 grade="15",
-                out_of="20",
-                default_out_of="20",
+                grade_out_of="20",
                 coefficient="1",
-                average="12",
-                max="18",
-                min="5",
+                class_average="12",
                 comment="",
                 is_bonus=False,
-                is_optionnal=False,
-                is_out_of_20=True,
+                is_optional=False,
             )
             grade2 = SimpleNamespace(
                 id="g2",
                 date=date(2025, 1, 16),
-                subject=SimpleNamespace(name="French"),
+                subject="French",
                 grade="12",
-                out_of="20",
-                default_out_of="20",
+                grade_out_of="20",
                 coefficient="1",
-                average="14",
-                max="19",
-                min="8",
+                class_average="14",
                 comment="",
                 is_bonus=False,
-                is_optionnal=False,
-                is_out_of_20=True,
+                is_optional=False,
             )
 
             mock_coordinator.data["grades"] = [grade1, grade2]
@@ -484,6 +485,8 @@ class TestCoordinatorAdditionalCoverage:
             coord._api_client.fetch_all_data = AsyncMock()
             coord._api_client.is_authenticated = MagicMock(return_value=True)
             coord.logger = MagicMock()
+            coord._previous_period_cache = None
+            coord._previous_period_cache_date = None
         return coord
 
     @pytest.mark.asyncio

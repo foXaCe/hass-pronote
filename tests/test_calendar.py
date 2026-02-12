@@ -30,8 +30,8 @@ class TestAsyncGetCalendarEventFromLessons:
         lesson = mock_lesson(
             subject_name="Français",
             start=datetime(2025, 1, 15, 8, 0),
-            teacher_name="Mme Martin",
-            classroom="B202",
+            teacher="Mme Martin",
+            room="B202",
         )
         event = async_get_calendar_event_from_lessons(lesson, "Europe/Paris")
 
@@ -49,13 +49,13 @@ class TestAsyncGetCalendarEventFromLessons:
         assert "Maths" in event.summary
 
     def test_detention_lesson(self, mock_lesson):
-        lesson = mock_lesson(detention=True)
+        lesson = mock_lesson(is_detention=True)
         event = async_get_calendar_event_from_lessons(lesson, "Europe/Paris")
 
         assert event.summary == "RETENUE"
 
     def test_canceled_detention(self, mock_lesson):
-        lesson = mock_lesson(detention=True, canceled=True)
+        lesson = mock_lesson(is_detention=True, canceled=True)
         event = async_get_calendar_event_from_lessons(lesson, "Europe/Paris")
 
         assert event.summary == "Annulé - RETENUE"
@@ -168,8 +168,8 @@ class TestHandleCoordinatorUpdate:
             subject_name="Français",
             start=now - timedelta(minutes=10),
             end=now + timedelta(minutes=50),
-            teacher_name="Mme Martin",
-            classroom="B202",
+            teacher="Mme Martin",
+            room="B202",
         )
         data = {
             "child_info": SimpleNamespace(name="Jean Dupont"),
@@ -235,10 +235,11 @@ class TestAsyncGetEvents:
         hass = MagicMock()
         hass.config.time_zone = "Europe/Paris"
 
+        tz = ZoneInfo("Europe/Paris")
         events = await cal.async_get_events(
             hass,
-            start_date=datetime(2025, 1, 14),
-            end_date=datetime(2025, 1, 16),
+            start_date=datetime(2025, 1, 14, tzinfo=tz),
+            end_date=datetime(2025, 1, 16, tzinfo=tz),
         )
 
         assert len(events) == 1
@@ -288,10 +289,11 @@ class TestAsyncGetEvents:
         hass = MagicMock()
         hass.config.time_zone = "Europe/Paris"
 
+        tz = ZoneInfo("Europe/Paris")
         events = await cal.async_get_events(
             hass,
-            start_date=datetime(2025, 1, 14),
-            end_date=datetime(2025, 1, 16),
+            start_date=datetime(2025, 1, 14, tzinfo=tz),
+            end_date=datetime(2025, 1, 16, tzinfo=tz),
         )
 
         assert len(events) == 1

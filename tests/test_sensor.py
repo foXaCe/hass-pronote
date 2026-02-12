@@ -93,78 +93,52 @@ def _make_lesson(
     start=None,
     end=None,
     canceled=False,
-    detention=False,
-    teacher_name="M. Dupont",
-    classroom="A101",
+    is_detention=False,
+    teacher="M. Dupont",
+    room="A101",
     status="",
-    background_color="#FFFFFF",
-    teacher_names=None,
-    classrooms=None,
-    outing=False,
-    memo=None,
-    group_name=None,
-    group_names=None,
-    exempted=False,
-    virtual_classrooms=None,
-    num=1,
-    test=False,
+    color="#FFFFFF",
+    is_outside=False,
 ):
     if start is None:
         start = datetime(2025, 1, 15, 8, 0)
     if end is None:
         end = start + timedelta(hours=1)
     return SimpleNamespace(
-        subject=SimpleNamespace(name=subject_name),
+        subject=subject_name,
         start=start,
         end=end,
         canceled=canceled,
-        detention=detention,
-        teacher_name=teacher_name,
-        classroom=classroom,
+        is_detention=is_detention,
+        teacher=teacher,
+        room=room,
         status=status,
-        background_color=background_color,
-        teacher_names=teacher_names or [teacher_name],
-        classrooms=classrooms or [classroom],
-        outing=outing,
-        memo=memo,
-        group_name=group_name,
-        group_names=group_names or [],
-        exempted=exempted,
-        virtual_classrooms=virtual_classrooms or [],
-        num=num,
-        test=test,
+        color=color,
+        is_outside=is_outside,
     )
 
 
 def _make_grade(
     subject_name="Mathematiques",
     grade="15",
-    out_of="20",
-    default_out_of="20",
+    grade_out_of="20",
     coefficient="1",
-    average="12.5",
-    max_grade="18",
-    min_grade="5",
+    class_average="12.5",
     comment="Bien",
     date_val=None,
     is_bonus=False,
-    is_optionnal=False,
-    is_out_of_20=True,
+    is_optional=False,
 ):
     return SimpleNamespace(
-        subject=SimpleNamespace(name=subject_name),
+        subject=subject_name,
         grade=grade,
-        out_of=out_of,
-        default_out_of=default_out_of,
+        grade_out_of=grade_out_of,
         coefficient=coefficient,
-        average=average,
-        max=max_grade,
-        min=min_grade,
+        class_average=class_average,
         comment=comment,
         date=date_val or date(2025, 1, 15),
         is_bonus=is_bonus,
-        is_optionnal=is_optionnal,
-        is_out_of_20=is_out_of_20,
+        is_optional=is_optional,
     )
 
 
@@ -177,7 +151,7 @@ def _make_homework(
     files=None,
 ):
     return SimpleNamespace(
-        subject=SimpleNamespace(name=subject_name),
+        subject=subject_name,
         description=description,
         done=done,
         date=date_val or date(2025, 1, 16),
@@ -191,16 +165,14 @@ def _make_absence(
     to_date=None,
     justified=False,
     hours="2",
-    days="0",
-    reasons=None,
+    reason="Maladie",
 ):
     return SimpleNamespace(
         from_date=from_date or datetime(2025, 1, 15, 8, 0),
         to_date=to_date or datetime(2025, 1, 15, 10, 0),
         justified=justified,
         hours=hours,
-        days=days,
-        reasons=reasons or ["Maladie"],
+        reason=reason,
     )
 
 
@@ -208,38 +180,26 @@ def _make_delay(
     date_val=None,
     minutes=10,
     justified=False,
-    justification="",
-    reasons=None,
+    reason="Transports",
 ):
     return SimpleNamespace(
         date=date_val or datetime(2025, 1, 15, 8, 0),
         minutes=minutes,
         justified=justified,
-        justification=justification,
-        reasons=reasons or ["Transports"],
+        reason=reason,
     )
 
 
 def _make_evaluation(
     name="Controle",
-    domain="Algebre",
     date_val=None,
     subject_name="Mathematiques",
-    description="",
-    coefficient=1,
-    paliers="",
-    teacher="M. Dupont",
     acquisitions=None,
 ):
     return SimpleNamespace(
         name=name,
-        domain=domain,
         date=date_val or date(2025, 1, 15),
-        subject=SimpleNamespace(name=subject_name),
-        description=description,
-        coefficient=coefficient,
-        paliers=paliers,
-        teacher=teacher,
+        subject=subject_name,
         acquisitions=acquisitions or [],
     )
 
@@ -249,52 +209,34 @@ def _make_average(
     class_average="12.0",
     max_avg="18.0",
     min_avg="5.0",
-    out_of="20",
-    default_out_of="20",
     subject_name="Mathematiques",
-    background_color="#FFFFFF",
 ):
     return SimpleNamespace(
         student=student,
         class_average=class_average,
         max=max_avg,
         min=min_avg,
-        out_of=out_of,
-        default_out_of=default_out_of,
-        subject=SimpleNamespace(name=subject_name),
-        background_color=background_color,
+        subject=subject_name,
     )
 
 
 def _make_punishment(
     given=None,
-    during_lesson="Mathematiques",
-    reasons=None,
+    subject="Mathematiques",
+    reason="Bavardage",
     circumstances="Bavardage",
-    nature="Retenue",
     duration="1h",
+    during_lesson=False,
     homework="",
-    exclusion=False,
-    homework_documents=None,
-    circumstance_documents=None,
-    giver="M. Dupont",
-    schedule=None,
-    schedulable=True,
 ):
     return SimpleNamespace(
-        given=given or datetime(2025, 1, 15, 10, 0),
-        during_lesson=during_lesson,
-        reasons=reasons or ["Bavardage"],
+        given=given or date(2025, 1, 15),
+        subject=subject,
+        reason=reason,
         circumstances=circumstances,
-        nature=nature,
         duration=duration,
+        during_lesson=during_lesson,
         homework=homework,
-        exclusion=exclusion,
-        homework_documents=homework_documents or [],
-        circumstance_documents=circumstance_documents or [],
-        giver=giver,
-        schedule=schedule or [],
-        schedulable=schedulable,
     )
 
 
@@ -440,7 +382,9 @@ class TestPronoteGenericSensor:
         assert sensor.available is True
 
     def test_available_false_no_data(self):
+        """When last_update_success is False, available should be False."""
         coord = _make_coordinator()
+        coord.last_update_success = False
         coord.data["ical_url"] = None
         sensor = PronoteGenericSensor(coord, "ical_url", "Timetable iCal URL")
         assert sensor.available is False
@@ -626,8 +570,8 @@ class TestPronoteTimetableSensor:
 
         # The second lesson (canceled duplicate) should be filtered out from the formatted list
         assert len(attrs["lessons"]) == 1
-        # But the canceled counter should still count it
-        assert attrs["canceled_lessons_counter"] == 1
+        # The duplicate canceled lesson is entirely skipped, so not counted
+        assert attrs["canceled_lessons_counter"] == 0
 
     def test_day_start_at_skips_canceled(self):
         """day_start_at should be the first NON-canceled lesson."""
@@ -891,14 +835,14 @@ class TestPronoteEvaluationsSensor:
         assert attrs["period_key"] == "trimestre_1"
 
     def test_extra_state_attributes_limits_display(self):
-        """Only EVALUATIONS_TO_DISPLAY - 1 evaluations should be shown."""
+        """Only EVALUATIONS_TO_DISPLAY evaluations should be shown."""
         evaluations = [_make_evaluation(name=f"Eval {i}") for i in range(EVALUATIONS_TO_DISPLAY + 5)]
         coord = _make_coordinator()
         coord.data["evaluations"] = evaluations
         sensor = PronoteEvaluationsSensor(coord, key="evaluations", name="Evaluations", period_key="trimestre_1")
         attrs = sensor.extra_state_attributes
 
-        assert len(attrs["evaluations"]) == EVALUATIONS_TO_DISPLAY - 1
+        assert len(attrs["evaluations"]) == EVALUATIONS_TO_DISPLAY
 
     def test_extra_state_attributes_none(self):
         coord = _make_coordinator()
