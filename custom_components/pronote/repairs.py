@@ -116,7 +116,7 @@ def async_delete_issue_for_entry(
     issue_type: str,
 ) -> None:
     """Delete a repair issue for a config entry."""
-    async_delete_issue(hass, issue_id=f"{issue_type}_{entry.entry_id}")
+    async_delete_issue(hass, DOMAIN, issue_id=f"{issue_type}_{entry.entry_id}")
 
 
 @callback
@@ -130,7 +130,7 @@ def async_delete_all_issues(
         ISSUE_TYPE_RATE_LIMITED,
         ISSUE_TYPE_CONNECTION_ERROR,
     ):
-        async_delete_issue(hass, entry, issue_type)
+        async_delete_issue(hass, DOMAIN, issue_id=f"{issue_type}_{entry.entry_id}")
 
 
 class PronoteSessionExpiredRepairFlow(RepairsFlow):
