@@ -105,7 +105,9 @@
                     "nickname": "Defina um apelido para o seu filho",
                     "refresh_interval": "Intervalo de atualização dos dados (em minutos)",
                     "lunch_break_time": "Hora limite para cálculo da pausa de almoço (HH:MM)",
-                    "alarm_offset": "Cálculo da hora do alarme (em minutos, antes da primeira aula do dia)"
+                    "alarm_offset": "Cálculo da hora do alarme (em minutos, antes da primeira aula do dia)",
+                    "grades_to_display": "Número máximo de notas por entidade (entre 1 e 50)",
+                    "show_all_periods": "Criar entidades para períodos futuros (por semestre ou trimestre)"
                 }
             }
         }
