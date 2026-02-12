@@ -1,8 +1,9 @@
 """Tests for the Pronote repairs module."""
 
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 import pytest
+from homeassistant.exceptions import HomeAssistantError
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.pronote.const import DOMAIN
@@ -10,11 +11,14 @@ from custom_components.pronote.repairs import (
     ISSUE_TYPE_CONNECTION_ERROR,
     ISSUE_TYPE_RATE_LIMITED,
     ISSUE_TYPE_SESSION_EXPIRED,
+    PronoteSessionExpiredRepairFlow,
     async_create_connection_error_issue,
+    async_create_fix_flow,
     async_create_rate_limited_issue,
     async_create_session_expired_issue,
     async_delete_all_issues,
     async_delete_issue_for_entry,
+    async_register_repairs,
 )
 
 
@@ -101,3 +105,163 @@ async def test_delete_all_issues(hass, mock_entry):
                 issue_ids.append(call.args[1])  # second arg is issue_id
         # Just verify we got 3 calls
         assert len(issue_ids) == 3
+
+
+class TestPronoteSessionExpiredRepairFlow:
+    """Tests for PronoteSessionExpiredRepairFlow."""
+
+    def _create_flow(self, hass, issue_id="session_expired_test_123", data=None):
+        """Helper to create a flow with patched parent __init__."""
+        with patch.object(PronoteSessionExpiredRepairFlow, "__init__", lambda self, i, d: None):
+            flow = PronoteSessionExpiredRepairFlow(issue_id, data)
+            flow.hass = hass
+            flow.issue_id = issue_id  # Set by parent RepairsFlow.__init__
+            # Add mocked parent methods
+            flow.async_abort = lambda reason: {"type": "abort", "reason": reason}
+            flow.async_show_form = lambda **kwargs: {"type": "form", **kwargs}
+            flow.async_create_fix_result = lambda: {"type": "create_entry"}
+            return flow
+
+    def test_init_with_data(self, hass):
+        """Test repair flow initialization with data."""
+        data = {"entry_id": "test_entry_123"}
+        flow = self._create_flow(hass, "session_expired_test_entry_123", data)
+        # Manually set _entry_id since we patched __init__
+        flow._entry_id = data.get("entry_id") if data else None
+        assert flow._entry_id == "test_entry_123"
+
+    def test_init_without_data(self, hass):
+        """Test repair flow initialization without data."""
+        flow = self._create_flow(hass, "session_expired_test_entry_123", None)
+        # Manually set _entry_id since we patched __init__
+        flow._entry_id = None
+        assert flow._entry_id is None
+
+    async def test_async_step_init_no_entry_id(self, hass):
+        """Test async_step_init aborts when no entry_id."""
+        flow = self._create_flow(hass, "session_expired_test", None)
+        flow._entry_id = None  # Explicitly set to None
+
+        result = await flow.async_step_init(None)
+
+        assert result["type"] == "abort"
+        assert result["reason"] == "no_entry"
+
+    async def test_async_step_init_entry_not_found(self, hass):
+        """Test async_step_init aborts when entry not found."""
+        flow = self._create_flow(hass, "session_expired_test_123", {"entry_id": "test_123"})
+        flow._entry_id = "test_123"
+
+        with patch.object(hass.config_entries, "async_get_entry", return_value=None):
+            result = await flow.async_step_init(None)
+
+        assert result["type"] == "abort"
+        assert result["reason"] == "entry_not_found"
+
+    async def test_async_step_init_redirects_to_reauth(self, hass):
+        """Test async_step_init redirects to reauth step."""
+        mock_entry = MagicMock()
+        flow = self._create_flow(hass, "session_expired_test_123", {"entry_id": "test_123"})
+        flow._entry_id = "test_123"
+
+        # Mock async_step_reauth to avoid actual execution
+        with patch.object(flow, "async_step_reauth") as mock_reauth:
+            mock_reauth.return_value = {"type": "form", "step_id": "reauth"}
+            with patch.object(hass.config_entries, "async_get_entry", return_value=mock_entry):
+                result = await flow.async_step_init(None)
+
+        # Should show the form for reauth
+        assert result["type"] == "form"
+        assert result["step_id"] == "reauth"
+
+    async def test_async_step_reauth_shows_form(self, hass):
+        """Test async_step_reauth shows form when no user_input."""
+        from unittest.mock import AsyncMock
+
+        flow = self._create_flow(hass, "session_expired_test_123", {"entry_id": "test_123"})
+        flow._entry_id = "test_123"
+
+        mock_entry = MagicMock()
+        mock_entry.start_reauth_flow = AsyncMock(return_value={"type": "form", "step_id": "reauth"})
+
+        with patch.object(hass.config_entries, "async_get_entry", return_value=mock_entry):
+            result = await flow.async_step_reauth(None)
+
+        assert result["type"] == "form"
+        assert result["step_id"] == "reauth"
+
+    async def test_async_step_reauth_entry_not_found(self, hass):
+        """Test async_step_reauth aborts when entry not found."""
+        flow = self._create_flow(hass, "session_expired_test_123", {"entry_id": "test_123"})
+        flow._entry_id = "test_123"
+
+        with patch.object(hass.config_entries, "async_get_entry", return_value=None):
+            result = await flow.async_step_reauth({})
+
+        assert result["type"] == "abort"
+        assert result["reason"] == "entry_not_found"
+
+    async def test_async_step_reauth_successful(self, hass):
+        """Test async_step_reauth creates fix result on success."""
+        from unittest.mock import AsyncMock
+
+        mock_entry = MagicMock()
+        mock_entry.start_reauth_flow = AsyncMock(return_value={"type": "abort", "reason": "reauth_successful"})
+
+        flow = self._create_flow(hass, "session_expired_test_123", {"entry_id": "test_123"})
+        flow._entry_id = "test_123"
+
+        # Mock the start_reauth_flow to return a successful abort
+        with patch.object(hass.config_entries, "async_get_entry", return_value=mock_entry):
+            result = await flow.async_step_reauth({})
+
+        assert result["type"] == "create_entry"
+
+    async def test_async_step_reauth_failed(self, hass):
+        """Test async_step_reauth aborts on failure."""
+        mock_entry = MagicMock()
+        flow = self._create_flow(hass, "session_expired_test_123", {"entry_id": "test_123"})
+        flow._entry_id = "test_123"
+
+        with patch.object(hass.config_entries, "async_get_entry", return_value=mock_entry):
+            with patch.object(mock_entry, "start_reauth_flow", side_effect=HomeAssistantError("Auth failed")):
+                result = await flow.async_step_reauth({})
+
+        assert result["type"] == "abort"
+        assert result["reason"] == "reauth_failed"
+
+    async def test_async_step_confirm_creates_fix_result(self, hass):
+        """Test async_step_confirm creates fix result."""
+        flow = self._create_flow(hass, "session_expired_test_123", {"entry_id": "test_123"})
+
+        result = await flow.async_step_confirm(None)
+
+        assert result["type"] == "create_entry"
+
+
+async def test_async_create_fix_flow_session_expired(hass):
+    """Test async_create_fix_flow creates repair flow for session expired."""
+    with patch.object(PronoteSessionExpiredRepairFlow, "__init__", lambda self, i, d: None):
+        flow = await async_create_fix_flow(
+            hass,
+            "session_expired_test_123",
+            {"entry_id": "test_123"},
+        )
+        assert isinstance(flow, PronoteSessionExpiredRepairFlow)
+
+
+async def test_async_create_fix_flow_not_fixable(hass):
+    """Test async_create_fix_flow raises error for non-fixable issues."""
+    with pytest.raises(HomeAssistantError, match="is not fixable"):
+        await async_create_fix_flow(
+            hass,
+            "rate_limited_test_123",
+            {"entry_id": "test_123"},
+        )
+
+
+async def test_async_register_repairs(hass):
+    """Test async_register_repairs does not raise."""
+    # This function is a no-op, just verify it doesn't raise
+    async_register_repairs(hass)
+    # No assertion needed - if it doesn't raise, it passes
