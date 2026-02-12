@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import asyncio
+import builtins
 import json
 import logging
 import re
@@ -30,7 +32,7 @@ class PronoteAuth:
         """Initialize le gestionnaire d'authentification."""
         self.hass = hass
 
-    def authenticate(
+    async def authenticate(
         self,
         connection_type: str,
         config_data: dict[str, Any],
@@ -51,27 +53,30 @@ class PronoteAuth:
         account_type = config_data.get("account_type", "student")
 
         try:
+            # Exécuter les appels bloquants dans un thread séparé
             if connection_type == "qrcode":
-                client, creds = self._auth_qrcode(config_data, account_type)
+                client, creds = await asyncio.to_thread(self._auth_qrcode, config_data, account_type)
             else:
-                client, creds = self._auth_username_password(config_data, account_type)
+                client, creds = await asyncio.to_thread(self._auth_username_password, config_data, account_type)
         except (CryptoError, QRCodeDecryptError) as err:
             raise AuthenticationError(f"Cryptographie/QR code invalide: {err}") from err
         except ENTLoginError as err:
             raise AuthenticationError(f"Échec login ENT: {err}") from err
-        except ConnectionError as err:  # noqa: F821
+        except ConnectionError as err:
+            raise ConnectionError(f"Erreur réseau: {err}") from err
+        except builtins.ConnectionError as err:
             raise ConnectionError(f"Erreur réseau: {err}") from err
         except Exception as err:
-            # Log sans exposer de potentiels secrets
-            _LOGGER.error("Échec authentification Pronote: %s", type(err).__name__)
+            # Log avec plus de détails pour debug (sans exposer de secrets)
+            _LOGGER.error("Échec authentification Pronote: %s - %s", type(err).__name__, str(err))
             raise AuthenticationError(f"Authentification impossible: {err}") from err
 
         if client is None:
             raise AuthenticationError("Client Pronote non créé")
 
-        # Vérification de session
+        # Vérification de session - aussi dans un thread
         try:
-            client.session_check()
+            await asyncio.to_thread(client.session_check)
         except Exception as err:
             _LOGGER.warning("Session check a échoué: %s", type(err).__name__)
             # On continue quand même, pronotepy peut auto-réparer
@@ -164,11 +169,13 @@ class PronoteAuth:
 
         # Premier login avec QR code
         if "qr_code_json" not in data:
+            _LOGGER.error("Aucun QR code JSON dans les données: %s", list(data.keys()))
             raise AuthenticationError("Aucun QR code ou token sauvegardé")
 
         _LOGGER.debug("Utilisation qrcode_login (première fois)")
         try:
             qr_code_json = json.loads(data["qr_code_json"])
+            _LOGGER.debug("QR code JSON parsé avec succès, URL: %s", qr_code_json.get("url", "N/A"))
             client = client_class.qrcode_login(
                 qr_code=qr_code_json,
                 pin=data["qr_code_pin"],
@@ -177,6 +184,7 @@ class PronoteAuth:
                 client_identifier=data.get("client_identifier"),
                 device_name=data.get("device_name"),
             )
+            _LOGGER.debug("qrcode_login réussi, client créé")
 
             # Export credentials pour sauvegarde
             exported = client.export_credentials()
@@ -189,8 +197,10 @@ class PronoteAuth:
             )
             return client, credentials
         except json.JSONDecodeError as err:
+            _LOGGER.error("JSONDecodeError: %s", err)
             raise InvalidResponseError(f"QR code JSON invalide: {err}") from err
         except Exception as err:
+            _LOGGER.error("Exception dans qrcode_login: %s - %s", type(err).__name__, err)
             raise AuthenticationError(f"QR code login échoué: {err}") from err
 
     def _normalize_url(self, url: str, account_type: str) -> str:

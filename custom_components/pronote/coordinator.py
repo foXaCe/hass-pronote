@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 import re
+import time
 from datetime import date, datetime, timedelta
 from typing import Any
 from zoneinfo import ZoneInfo
@@ -41,12 +42,14 @@ from .repairs import (
 _LOGGER = logging.getLogger(__name__)
 
 
-def get_day_start_at(lessons: list[Lesson] | None) -> datetime | None:
+def get_day_start_at(lessons: list[Lesson] | None, logger: logging.Logger | None = None) -> datetime | None:
     """Get the start time of the first non-canceled lesson."""
     if lessons is None:
         return None
 
-    for lesson in lessons:
+    for i, lesson in enumerate(lessons):
+        if logger:
+            logger.debug("get_day_start_at: lesson[%d] start=%s canceled=%s", i, lesson.start, lesson.canceled)
         if not lesson.canceled:
             return lesson.start
 
@@ -68,6 +71,8 @@ class PronoteDataUpdateCoordinator(TimestampDataUpdateCoordinator):
         )
         self.config_entry = entry
         self._api_client = PronoteAPIClient(hass)
+        self._previous_period_cache: dict[str, Any] | None = None
+        self._previous_period_cache_date: date | None = None
 
     async def _async_update_data(self) -> dict[str, Any]:
         """Get the latest data from Pronote and updates the state."""
@@ -77,45 +82,55 @@ class PronoteDataUpdateCoordinator(TimestampDataUpdateCoordinator):
         config_data = dict(self.config_entry.data)
         connection_type = config_data.get("connection_type", "username_password")
 
-        # Authentication
-        try:
-            await self._api_client.authenticate(connection_type, config_data)
-            # Clear any transient issues after successful auth
-            async_delete_issue_for_entry(self.hass, self.config_entry, "connection_error")
-            async_delete_issue_for_entry(self.hass, self.config_entry, "rate_limited")
-        except AuthenticationError as err:
-            async_create_session_expired_issue(self.hass, self.config_entry)
-            raise ConfigEntryAuthFailed(f"Authentication failed with Pronote: {err}") from err
-        except RateLimitError as err:
-            async_create_rate_limited_issue(self.hass, self.config_entry, err.retry_after)
-            # Honor retry_after from rate limiting (HTTP 429)
-            raise UpdateFailed(
-                f"Rate limited by Pronote: {err}",
-                retry_after=err.retry_after,
-            ) from err
-        except CircuitBreakerOpenError as err:
-            # Circuit breaker open - wait for recovery (no repair, transient)
-            raise UpdateFailed(
-                f"Pronote API temporarily unavailable: {err}",
-                retry_after=300,  # 5 minutes default recovery
-            ) from err
-        except ConnectionError as err:
-            async_create_connection_error_issue(self.hass, self.config_entry, str(err))
-            raise UpdateFailed(f"Connection error with Pronote: {err}") from err
-        except Exception as err:
-            raise UpdateFailed(f"Error authenticating with Pronote: {err}") from err
-
+        # Authentication (skip if already connected)
+        t_auth_start = time.perf_counter()
         if not self._api_client.is_authenticated():
-            async_create_session_expired_issue(self.hass, self.config_entry)
-            raise ConfigEntryAuthFailed("Unable to authenticate with Pronote")
+            try:
+                await self._api_client.authenticate(connection_type, config_data)
+                # Clear any transient issues after successful auth
+                async_delete_issue_for_entry(self.hass, self.config_entry, "connection_error")
+                async_delete_issue_for_entry(self.hass, self.config_entry, "rate_limited")
+            except AuthenticationError as err:
+                async_create_session_expired_issue(self.hass, self.config_entry)
+                raise ConfigEntryAuthFailed(f"Authentication failed with Pronote: {err}") from err
+            except RateLimitError as err:
+                async_create_rate_limited_issue(self.hass, self.config_entry, err.retry_after)
+                raise UpdateFailed(
+                    f"Rate limited by Pronote: {err}",
+                    retry_after=err.retry_after,
+                ) from err
+            except CircuitBreakerOpenError as err:
+                raise UpdateFailed(
+                    f"Pronote API temporarily unavailable: {err}",
+                    retry_after=300,
+                ) from err
+            except ConnectionError as err:
+                async_create_connection_error_issue(self.hass, self.config_entry, str(err))
+                raise UpdateFailed(f"Connection error with Pronote: {err}") from err
+            except Exception as err:
+                raise UpdateFailed(f"Error authenticating with Pronote: {err}") from err
 
-        # Fetch all data
+            if not self._api_client.is_authenticated():
+                async_create_session_expired_issue(self.hass, self.config_entry)
+                raise ConfigEntryAuthFailed("Unable to authenticate with Pronote")
+        else:
+            _LOGGER.debug("TIMING: auth skipped (reusing session)")
+
+        t_auth_end = time.perf_counter()
+        _LOGGER.debug("TIMING: auth=%.3fs", t_auth_end - t_auth_start)
+
+        # Fetch all data (pass previous_period_cache if still valid today)
+        t_fetch_start = time.perf_counter()
+        prev_cache = self._previous_period_cache if self._previous_period_cache_date == today else None
+        show_all_periods = self.config_entry.options.get("show_all_periods", False)
         try:
             pronote_data = await self._api_client.fetch_all_data(
                 today=today,
                 lesson_max_days=LESSON_MAX_DAYS,
                 homework_max_days=HOMEWORK_MAX_DAYS,
                 info_survey_max_days=INFO_SURVEY_LIMIT_MAX_DAYS,
+                previous_period_cache=prev_cache,
+                show_all_periods=show_all_periods,
             )
             # Clear all transient issues after successful fetch
             async_delete_issue_for_entry(self.hass, self.config_entry, "connection_error")
@@ -127,22 +142,28 @@ class PronoteDataUpdateCoordinator(TimestampDataUpdateCoordinator):
                 retry_after=err.retry_after,
             ) from err
         except AuthenticationError as err:
+            self._api_client.reset()  # Force re-auth on next refresh
             async_create_session_expired_issue(self.hass, self.config_entry)
             raise ConfigEntryAuthFailed(f"Session expired: {err}") from err
         except InvalidResponseError as err:
+            self._api_client.reset()
             raise UpdateFailed(f"Invalid response from Pronote: {err}") from err
         except ConnectionError as err:
+            self._api_client.reset()
             async_create_connection_error_issue(self.hass, self.config_entry, str(err))
             raise UpdateFailed(f"Connection error: {err}") from err
         except Exception as err:
+            self._api_client.reset()
             raise UpdateFailed(f"Error fetching data from Pronote: {err}") from err
+
+        # Update previous_period_cache after successful fetch
+        if pronote_data.previous_period_data:
+            self._previous_period_cache = pronote_data.previous_period_data
+            self._previous_period_cache_date = today
 
         # Save refreshed credentials for QR code connections
         if connection_type == "qrcode" and pronote_data.credentials:
             new_data = config_data.copy()
-            # Remove one-time QR code data after first successful login
-            new_data.pop("qr_code_json", None)
-            new_data.pop("qr_code_pin", None)
             # Save refreshed token credentials for next token_login
             new_data["qr_code_url"] = pronote_data.credentials["pronote_url"]
             new_data["qr_code_username"] = pronote_data.credentials["username"]
@@ -151,6 +172,9 @@ class PronoteDataUpdateCoordinator(TimestampDataUpdateCoordinator):
             new_data["client_identifier"] = pronote_data.credentials["client_identifier"]
 
             self.hass.config_entries.async_update_entry(self.config_entry, data=new_data)
+
+        t_fetch_end = time.perf_counter()
+        _LOGGER.debug("TIMING: fetch_all_data=%.3fs", t_fetch_end - t_fetch_start)
 
         # Verify we have child info
         if pronote_data.child_info is None:
@@ -192,6 +216,7 @@ class PronoteDataUpdateCoordinator(TimestampDataUpdateCoordinator):
         next_alarm = self._compute_next_alarm(
             pronote_data.lessons_today,
             pronote_data.lessons_next_day,
+            pronote_data.lessons_period,
         )
         data["next_alarm"] = next_alarm
 
@@ -206,26 +231,60 @@ class PronoteDataUpdateCoordinator(TimestampDataUpdateCoordinator):
         self,
         lessons_today: list[Lesson] | None,
         lessons_next_day: list[Lesson] | None,
+        lessons_period: list[Lesson] | None,
     ) -> datetime | None:
         """Compute the next alarm time based on lessons."""
         next_alarm = None
         tz = ZoneInfo(self.hass.config.time_zone)
-        today_start_at = get_day_start_at(lessons_today)
-        next_day_start_at = get_day_start_at(lessons_next_day)
+        now = datetime.now(tz)
+        alarm_offset = self.config_entry.options.get("alarm_offset", DEFAULT_ALARM_OFFSET)
 
-        if today_start_at or next_day_start_at:
-            alarm_offset = self.config_entry.options.get("alarm_offset", DEFAULT_ALARM_OFFSET)
-            if today_start_at is not None:
-                todays_alarm = today_start_at - timedelta(minutes=alarm_offset)
-                if datetime.now(tz) <= todays_alarm:
-                    next_alarm = todays_alarm
+        today_start_at = get_day_start_at(lessons_today, _LOGGER)
+        if today_start_at is not None:
+            if today_start_at.tzinfo is None:
+                today_start_at = today_start_at.replace(tzinfo=tz)
+            todays_alarm = today_start_at - timedelta(minutes=alarm_offset)
+            _LOGGER.debug("compute_next_alarm: todays_alarm=%s, now=%s", todays_alarm, now)
+            if now <= todays_alarm:
+                next_alarm = todays_alarm
 
-            if next_alarm is None and next_day_start_at is not None:
-                next_alarm = next_day_start_at - timedelta(minutes=alarm_offset)
+        if next_alarm is None:
+            next_day_start_at = get_day_start_at(lessons_next_day, _LOGGER)
+            if next_day_start_at is not None:
+                next_day_alarm = next_day_start_at - timedelta(minutes=alarm_offset)
+                if next_day_alarm.tzinfo is None:
+                    next_day_alarm = next_day_alarm.replace(tzinfo=tz)
+                if now <= next_day_alarm:
+                    next_alarm = next_day_alarm
 
-        if next_alarm is not None:
+        if next_alarm is None and lessons_period:
+            _LOGGER.debug("compute_next_alarm: searching in lessons_period (%d lessons)", len(lessons_period))
+            today_date = now.date()
+            # Group future lessons by day (skip today, already handled)
+            future_days: dict[date, list] = {}
+            for lesson in lessons_period:
+                lesson_date = lesson.start.date()
+                if lesson_date <= today_date:
+                    continue
+                future_days.setdefault(lesson_date, []).append(lesson)
+            # Find first future school day with non-canceled lessons
+            for day_date in sorted(future_days):
+                day_start = get_day_start_at(future_days[day_date])
+                if day_start is not None:
+                    if day_start.tzinfo is None:
+                        day_start = day_start.replace(tzinfo=tz)
+                    next_alarm = day_start - timedelta(minutes=alarm_offset)
+                    _LOGGER.debug(
+                        "compute_next_alarm: found in period, day=%s, lesson_start=%s",
+                        day_date,
+                        day_start,
+                    )
+                    break
+
+        if next_alarm is not None and next_alarm.tzinfo is None:
             next_alarm = next_alarm.replace(tzinfo=tz)
 
+        _LOGGER.debug("compute_next_alarm: final next_alarm=%s", next_alarm)
         return next_alarm
 
     def _compare_and_fire_events(self, previous_data: dict[str, Any] | None) -> None:

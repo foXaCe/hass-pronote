@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import time
 from collections.abc import Callable
 from datetime import date, datetime, timedelta
 from typing import TYPE_CHECKING, Any, TypeVar
@@ -115,14 +116,11 @@ class PronoteAPIClient:
         self._config_data = config_data
 
         try:
-            # Exécution dans l'executor car pronotepy est synchrone
-            if self.hass:
-                client, creds = await asyncio.wait_for(
-                    self.hass.async_add_executor_job(self._auth.authenticate, connection_type, config_data),
-                    timeout=self.timeout,
-                )
-            else:
-                client, creds = self._auth.authenticate(connection_type, config_data)
+            # Exécution avec await car authenticate est maintenant async
+            client, creds = await asyncio.wait_for(
+                self._auth.authenticate(connection_type, config_data),
+                timeout=self.timeout,
+            )
 
             self._client = client
             self._credentials = creds
@@ -142,12 +140,19 @@ class PronoteAPIClient:
         """Vérifie si le client est authentifié."""
         return self._client is not None
 
+    def reset(self) -> None:
+        """Reset le client pour forcer une re-authentification."""
+        self._client = None
+        self._credentials = None
+
     async def fetch_all_data(
         self,
         today: date | None = None,
         lesson_max_days: int = 15,
         homework_max_days: int = 15,
         info_survey_max_days: int = 7,
+        previous_period_cache: dict[str, Any] | None = None,
+        show_all_periods: bool = False,
     ) -> PronoteData:
         """Récupère toutes les données Pronote.
 
@@ -184,6 +189,8 @@ class PronoteAPIClient:
                         lesson_max_days,
                         homework_max_days,
                         info_survey_max_days,
+                        previous_period_cache,
+                        show_all_periods,
                     ),
                     timeout=self.timeout,
                 )
@@ -193,6 +200,8 @@ class PronoteAPIClient:
                     lesson_max_days,
                     homework_max_days,
                     info_survey_max_days,
+                    previous_period_cache,
+                    show_all_periods,
                 )
 
             self._circuit_breaker.record_success()
@@ -214,11 +223,14 @@ class PronoteAPIClient:
         lesson_max_days: int,
         homework_max_days: int,
         info_survey_max_days: int,
+        previous_period_cache: dict[str, Any] | None = None,
+        show_all_periods: bool = False,
     ) -> PronoteData:
         """Version synchrone de fetch_all_data."""
         if not self._client:
             raise AuthenticationError("Client non initialisé")
 
+        t0 = time.perf_counter()
         client = self._client
         account_type = self._config_data.get("account_type", "student") if self._config_data else "student"
 
@@ -233,47 +245,65 @@ class PronoteAPIClient:
         child_info = ChildInfo(
             name=child_info_obj.name if hasattr(child_info_obj, "name") else "Unknown",
             id=getattr(child_info_obj, "id", None),
-            class_name=getattr(child_info_obj, "class", None),
+            class_name=getattr(child_info_obj, "class_name", None),
             establishment=getattr(child_info_obj, "establishment", None),
         )
 
         # Cours
+        t1 = time.perf_counter()
         lessons_today = self._safe_get_lessons(client, today)
         lessons_tomorrow = self._safe_get_lessons(client, today + timedelta(days=1))
         lessons_period = self._get_lessons_period(client, today, lesson_max_days)
         lessons_next_day = self._get_next_day_lessons(client, today, lessons_tomorrow, lesson_max_days)
+        t2 = time.perf_counter()
+        _LOGGER.debug("TIMING: lessons=%.3fs", t2 - t1)
 
         # Période courante
         current_period = getattr(client, "current_period", None)
         period_info = self._convert_period(current_period) if current_period else None
 
         # Données de la période courante
-        grades = self._safe_get_period_data(current_period, "grades", Grade)
-        averages = self._safe_get_period_data(current_period, "averages", Average)
-        absences = self._safe_get_period_data(current_period, "absences", Absence)
-        delays = self._safe_get_period_data(current_period, "delays", Delay)
-        punishments = self._safe_get_period_data(current_period, "punishments", Punishment)
-        evaluations = self._safe_get_period_data(current_period, "evaluations", Evaluation)
+        t3 = time.perf_counter()
+        grades = self._safe_get_period_data(current_period, "grades", self._convert_grade)
+        averages = self._safe_get_period_data(current_period, "averages", self._convert_average)
+        absences = self._safe_get_period_data(current_period, "absences", self._convert_absence)
+        delays = self._safe_get_period_data(current_period, "delays", self._convert_delay)
+        punishments = self._safe_get_period_data(current_period, "punishments", self._convert_punishment)
+        evaluations = self._safe_get_period_data(current_period, "evaluations", self._convert_evaluation)
         overall_average = self._safe_get_overall_average(current_period)
+        t4 = time.perf_counter()
+        _LOGGER.debug("TIMING: period_data=%.3fs", t4 - t3)
 
         # Devoirs
+        t5 = time.perf_counter()
         homework = self._safe_get_homework(client, today)
         homework_period = self._safe_get_homework(client, today, today + timedelta(days=homework_max_days))
+        t6 = time.perf_counter()
+        _LOGGER.debug("TIMING: homework=%.3fs", t6 - t5)
 
         # Informations et sondages
+        t7 = time.perf_counter()
         info_surveys = self._safe_get_info_surveys(client, today, info_survey_max_days)
+        t8 = time.perf_counter()
+        _LOGGER.debug("TIMING: info_surveys=%.3fs", t8 - t7)
 
         # iCal
+        t9 = time.perf_counter()
         ical_url = self._safe_get_ical(client)
+        t10 = time.perf_counter()
+        _LOGGER.debug("TIMING: ical=%.3fs", t10 - t9)
 
         # Menus
         menus = self._safe_get_menus(client, today)
+        t11 = time.perf_counter()
+        _LOGGER.debug("TIMING: menus=%.3fs", t11 - t10)
 
         # Toutes les périodes
         periods = self._safe_get_periods(client)
         current_period_key = slugify(period_info.name, separator="_") if period_info else None
 
-        # Périodes précédentes
+        # Périodes précédentes (avec cache optionnel)
+        t12 = time.perf_counter()
         previous_periods: list[PeriodInfo] = []
         supported_types = ["trimestre", "semestre"]
         period_type = None
@@ -283,34 +313,45 @@ class PronoteAPIClient:
         previous_period_data: dict[str, Any] = {}
         if period_type in supported_types and periods:
             for period in periods:
-                if period.name.lower().startswith(period_type) and period.start < period_info.start:
+                if period.name.lower().startswith(period_type) and (
+                    show_all_periods or period.start < period_info.start
+                ):
                     previous_periods.append(period)
-                    p_key = slugify(period.name, separator="_")
 
-                    # Récupération données période précédente (dans executor)
+            if previous_period_cache is not None:
+                # Utiliser le cache (les données de périodes passées ne changent pas)
+                previous_period_data = previous_period_cache
+                _LOGGER.debug("TIMING: previous_periods using cache (%d keys)", len(previous_period_data))
+            else:
+                for period in previous_periods:
+                    p_key = slugify(period.name, separator="_")
                     raw_period = next((p for p in client.periods if p.name == period.name), None)
                     if raw_period:
                         previous_period_data[f"grades_{p_key}"] = self._safe_get_period_data(
-                            raw_period, "grades", Grade
+                            raw_period, "grades", self._convert_grade
                         )
                         previous_period_data[f"averages_{p_key}"] = self._safe_get_period_data(
-                            raw_period, "averages", Average
+                            raw_period, "averages", self._convert_average
                         )
                         previous_period_data[f"absences_{p_key}"] = self._safe_get_period_data(
-                            raw_period, "absences", Absence
+                            raw_period, "absences", self._convert_absence
                         )
                         previous_period_data[f"delays_{p_key}"] = self._safe_get_period_data(
-                            raw_period, "delays", Delay
+                            raw_period, "delays", self._convert_delay
                         )
                         previous_period_data[f"evaluations_{p_key}"] = self._safe_get_period_data(
-                            raw_period, "evaluations", Evaluation
+                            raw_period, "evaluations", self._convert_evaluation
                         )
                         previous_period_data[f"punishments_{p_key}"] = self._safe_get_period_data(
-                            raw_period, "punishments", Punishment
+                            raw_period, "punishments", self._convert_punishment
                         )
                         previous_period_data[f"overall_average_{p_key}"] = self._safe_get_overall_average(raw_period)
+        t13 = time.perf_counter()
+        _LOGGER.debug("TIMING: previous_periods=%.3fs", t13 - t12)
 
         active_periods = previous_periods + ([period_info] if period_info else [])
+
+        _LOGGER.debug("TIMING: _fetch_all_data_sync total=%.3fs", t13 - t0)
 
         # Credentials pour refresh
         creds_dict = None
@@ -423,10 +464,19 @@ class PronoteAPIClient:
             _LOGGER.debug("Erreur récupération %s: %s", attr, err)
             return None
 
-    def _safe_get_overall_average(self, period) -> str | None:
-        """Récupère la moyenne générale."""
+    def _safe_get_overall_average(self, period) -> float | str | None:
+        """Récupère la moyenne générale, normalisée en float si possible."""
         try:
-            return getattr(period, "overall_average", None)
+            overall = getattr(period, "overall_average", None)
+            if overall is None:
+                return None
+            # Pronote peut retourner "13,2" (virgule française) → normaliser en float
+            if isinstance(overall, str):
+                try:
+                    return float(overall.replace(",", "."))
+                except (TypeError, ValueError):
+                    return overall
+            return overall
         except Exception as err:
             _LOGGER.debug("Erreur moyenne générale: %s", err)
             return None
@@ -505,10 +555,12 @@ class PronoteAPIClient:
 
     def _convert_grade(self, grade) -> Grade:
         """Convertit un objet Grade pronotepy."""
+        subject = getattr(grade, "subject", None)
+        subject_name = str(subject.name) if subject and hasattr(subject, "name") else str(subject) if subject else ""
         return Grade(
             id=str(getattr(grade, "id", "")),
             date=getattr(grade, "date", date.today()),
-            subject=str(getattr(grade, "subject", "")),
+            subject=subject_name,
             grade=str(getattr(grade, "grade", "")),
             grade_out_of=str(getattr(grade, "grade_out_of", "")),
             coefficient=str(getattr(grade, "coefficient", "")),
@@ -520,8 +572,10 @@ class PronoteAPIClient:
 
     def _convert_average(self, average) -> Average:
         """Convertit un objet Average pronotepy."""
+        subject = getattr(average, "subject", None)
+        subject_name = str(subject.name) if subject and hasattr(subject, "name") else str(subject) if subject else ""
         return Average(
-            subject=str(getattr(average, "subject", "")),
+            subject=subject_name,
             student=str(getattr(average, "student", "")),
             class_average=str(getattr(average, "class_average", "")),
             max=str(getattr(average, "max", "")),
@@ -552,11 +606,13 @@ class PronoteAPIClient:
     def _convert_punishment(self, punishment) -> Punishment:
         """Convertit un objet Punishment pronotepy."""
         exclusion_dates = getattr(punishment, "exclusion_dates", None)
+        reasons = getattr(punishment, "reasons", None)
+        reason_str = ", ".join(reasons) if reasons and isinstance(reasons, list) else str(reasons) if reasons else None
         return Punishment(
             id=str(getattr(punishment, "id", "")),
             given=getattr(punishment, "given", date.today()),
             subject=getattr(punishment, "subject", None),
-            reason=getattr(punishment, "reasons", None),
+            reason=reason_str,
             duration=getattr(punishment, "duration", None),
             during_lesson=getattr(punishment, "during_lesson", False),
             homework=getattr(punishment, "homework", None),
@@ -566,20 +622,24 @@ class PronoteAPIClient:
     def _convert_evaluation(self, evaluation) -> Evaluation:
         """Convertit un objet Evaluation pronotepy."""
         acquisitions = getattr(evaluation, "acquisitions", None)
+        subject = getattr(evaluation, "subject", None)
+        subject_name = str(subject.name) if subject and hasattr(subject, "name") else str(subject) if subject else None
         return Evaluation(
             id=str(getattr(evaluation, "id", "")),
             name=str(getattr(evaluation, "name", "")),
-            subject=getattr(evaluation, "subject", None),
+            subject=subject_name,
             date=getattr(evaluation, "date", datetime.now()),
             acquisitions=[{"name": a.name, "level": a.level} for a in acquisitions] if acquisitions else None,
         )
 
     def _convert_homework(self, homework) -> Homework:
         """Convertit un objet Homework pronotepy."""
+        subject = getattr(homework, "subject", None)
+        subject_name = str(subject.name) if subject and hasattr(subject, "name") else str(subject) if subject else None
         return Homework(
             id=str(getattr(homework, "id", "")),
             date=getattr(homework, "date", date.today()),
-            subject=getattr(homework, "subject", None),
+            subject=subject_name,
             description=str(getattr(homework, "description", "")),
             done=getattr(homework, "done", False),
             color=getattr(homework, "background_color", None),

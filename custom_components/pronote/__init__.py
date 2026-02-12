@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import time
 from datetime import timedelta
 
 from homeassistant.core import HomeAssistant
@@ -33,15 +34,27 @@ async def async_migrate_entry(hass, config_entry) -> bool:
 
 async def async_setup_entry(hass: HomeAssistant, entry: PronoteConfigEntry) -> bool:
     """Set up Pronote from a config entry."""
+    t0 = time.perf_counter()
     coordinator = PronoteDataUpdateCoordinator(hass, entry)
 
+    t1 = time.perf_counter()
     await coordinator.async_config_entry_first_refresh()
+    t2 = time.perf_counter()
 
     entry.runtime_data = coordinator
 
     entry.async_on_unload(entry.add_update_listener(update_listener))
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
+    t3 = time.perf_counter()
+
+    _LOGGER.debug(
+        "BOOT TIMING: coordinator_init=%.3fs, first_refresh=%.3fs, platform_setup=%.3fs, total=%.3fs",
+        t1 - t0,
+        t2 - t1,
+        t3 - t2,
+        t3 - t0,
+    )
 
     return True
 
