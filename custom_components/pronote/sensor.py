@@ -11,10 +11,11 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from slugify import slugify
 
 from .const import (
+    DEFAULT_GRADES_TO_DISPLAY,
     DEFAULT_LUNCH_BREAK_TIME,
     DOMAIN,
     EVALUATIONS_TO_DISPLAY,
-    GRADES_TO_DISPLAY,
+    TIMETABLE_PERIOD_MAX_LESSONS,
     PronoteConfigEntry,
 )
 from .coordinator import PronoteDataUpdateCoordinator
@@ -22,6 +23,7 @@ from .entity import PronoteEntity
 from .pronote_formatter import (
     format_absence,
     format_average,
+    format_compact_lesson,
     format_delay,
     format_evaluation,
     format_grade,
@@ -213,7 +215,7 @@ class PronoteGenericSensor(PronoteEntity, SensorEntity):
     @property
     def available(self) -> bool:
         """Return if entity is available."""
-        return self.coordinator.last_update_success and self.coordinator.data[self._coordinator_key] is not None
+        return self.coordinator.last_update_success
 
 
 class PronotePeriodRelatedSensor(PronoteGenericSensor):
@@ -304,6 +306,7 @@ class PronoteTimetableSensor(PronoteGenericSensor):
             "lessons_tomorrow",
             "lessons_next_day",
         ]
+        is_period = self._key == "lessons_period"
         lunch_break_time = datetime.strptime(
             self.coordinator.config_entry.options.get("lunch_break_time", DEFAULT_LUNCH_BREAK_TIME),
             "%H:%M",
@@ -315,9 +318,24 @@ class PronoteTimetableSensor(PronoteGenericSensor):
             self._lunch_break_start_at = None
             self._lunch_break_end_at = None
             canceled_counter = 0
-            for lesson in lessons:
-                index = lessons.index(lesson)
-                if not (lesson.start == lessons[index - 1].start and lesson.canceled is True):
+
+            # For period timetable, keep only upcoming lessons and cap the count
+            if is_period:
+                now = datetime.now()
+                filtered_lessons = [lesson for lesson in lessons if lesson.start >= now]
+                if len(filtered_lessons) > TIMETABLE_PERIOD_MAX_LESSONS:
+                    filtered_lessons = filtered_lessons[:TIMETABLE_PERIOD_MAX_LESSONS]
+            else:
+                filtered_lessons = lessons
+
+            for index, lesson in enumerate(filtered_lessons):
+                # Skip duplicated canceled lessons sharing the same start time
+                if index > 0 and lesson.start == filtered_lessons[index - 1].start and lesson.canceled is True:
+                    continue
+
+                if is_period:
+                    attributes.append(format_compact_lesson(lesson, lunch_break_time))
+                else:
                     attributes.append(format_lesson(lesson, lunch_break_time))
                 if lesson.canceled is False and self._start_at is None:
                     self._start_at = lesson.start
@@ -364,20 +382,21 @@ class PronoteGradesSensor(PronotePeriodRelatedSensor):
 
     @property
     def native_value(self):
-        """Return the number of grades."""
-        return len_or_none(self.coordinator.data[self._key])
+        """Return the number of grades (capped by grades_to_display option)."""
+        data = self.coordinator.data.get(self._key)
+        if data is None:
+            return None
+        limit = int(self.coordinator.config_entry.options.get("grades_to_display", DEFAULT_GRADES_TO_DISPLAY))
+        return min(len(data), limit)
 
     @property
     def extra_state_attributes(self):
         """Return the state attributes."""
         attributes = super().extra_state_attributes
         grades = []
-        index_note = 0
+        limit = int(self.coordinator.config_entry.options.get("grades_to_display", DEFAULT_GRADES_TO_DISPLAY))
         if self.coordinator.data[self._key] is not None:
-            for grade in self.coordinator.data[self._key]:
-                index_note += 1
-                if index_note == GRADES_TO_DISPLAY:
-                    break
+            for grade in self.coordinator.data[self._key][:limit]:
                 grades.append(format_grade(grade))
 
         attributes["grades"] = grades
@@ -523,12 +542,8 @@ class PronoteEvaluationsSensor(PronotePeriodRelatedSensor):
         """Return the state attributes."""
         attributes = super().extra_state_attributes
         evaluations = []
-        index_note = 0
         if self.coordinator.data[self._key] is not None:
-            for evaluation in self.coordinator.data[self._key]:
-                index_note += 1
-                if index_note == EVALUATIONS_TO_DISPLAY:
-                    break
+            for evaluation in self.coordinator.data[self._key][:EVALUATIONS_TO_DISPLAY]:
                 evaluations.append(format_evaluation(evaluation))
 
         attributes["evaluations"] = evaluations

@@ -12,7 +12,13 @@ from homeassistant import config_entries
 from homeassistant.core import callback
 from homeassistant.data_entry_flow import FlowResult
 from homeassistant.exceptions import HomeAssistantError
-from homeassistant.helpers.selector import SelectSelector, SelectSelectorConfig
+from homeassistant.helpers.selector import (
+    NumberSelector,
+    NumberSelectorConfig,
+    NumberSelectorMode,
+    SelectSelector,
+    SelectSelectorConfig,
+)
 from pronotepy.ent import *  # noqa: F403
 
 from .api import (
@@ -21,8 +27,10 @@ from .api import (
 )
 from .const import (
     DEFAULT_ALARM_OFFSET,
+    DEFAULT_GRADES_TO_DISPLAY,
     DEFAULT_LUNCH_BREAK_TIME,
     DEFAULT_REFRESH_INTERVAL,
+    DEFAULT_SHOW_ALL_PERIODS,
     DOMAIN,
 )
 
@@ -90,7 +98,7 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         errors: dict[str, str] = {}
         if user_input is not None:
             try:
-                _LOGGER.debug("User Input: %s", user_input)
+                _LOGGER.debug("User Input received (keys: %s)", list(user_input.keys()))
                 self._user_inputs.update(user_input)
                 self._user_inputs["connection_type"] = "username_password"
 
@@ -111,7 +119,6 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 self.pronote_client = client
 
                 if self._user_inputs["account_type"] == "parent":
-                    _LOGGER.debug("_User Inputs UP Parent: %s", self._user_inputs)
                     return await self.async_step_parent()
 
                 return await self.async_step_nickname()
@@ -128,7 +135,7 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         errors: dict[str, str] = {}
         if user_input is not None:
             try:
-                _LOGGER.debug("User Input: %s", user_input)
+                _LOGGER.debug("User Input received (keys: %s)", list(user_input.keys()))
                 self._user_inputs.update(user_input)
                 self._user_inputs["connection_type"] = "qrcode"
                 self._user_inputs["qr_code_uuid"] = str(uuid.uuid4())
@@ -140,12 +147,13 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
                 if client is None:
                     raise InvalidAuth
-            except AuthenticationError:
+            except AuthenticationError as err:
+                _LOGGER.error("AuthenticationError during QR auth: %s", err)
                 errors["base"] = "invalid_auth"
             except InvalidAuth:
                 errors["base"] = "invalid_auth"
             except Exception as err:
-                _LOGGER.error("Unexpected error during QR auth: %s", err)
+                _LOGGER.error("Unexpected error during QR auth: %s - %s", type(err).__name__, err)
                 errors["base"] = "invalid_auth"
             else:
                 # Save credentials from auth response
@@ -189,7 +197,6 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             )
 
         self._user_inputs["child"] = user_input["child"]
-        _LOGGER.debug("Parent Input UP: %s", self._user_inputs)
         return await self.async_step_nickname()
 
     async def async_step_nickname(self, user_input: dict | None = None) -> FlowResult:
@@ -210,7 +217,11 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             return self.async_create_entry(
                 title=title,
                 data=self._user_inputs,
-                options={"nickname": self._user_inputs["nickname"]},
+                options={
+                    "nickname": self._user_inputs["nickname"],
+                    "grades_to_display": DEFAULT_GRADES_TO_DISPLAY,
+                    "show_all_periods": DEFAULT_SHOW_ALL_PERIODS,
+                },
             )
 
         STEP_NICKNAME_SCHEMA = vol.Schema(
@@ -251,8 +262,11 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     creds = self._api_client._credentials
                     if client is None:
                         raise InvalidAuth
-                except (AuthenticationError, InvalidAuth, Exception):
+                except (AuthenticationError, InvalidAuth):
                     errors["base"] = "invalid_auth"
+                except Exception:
+                    _LOGGER.exception("Unexpected error during QR reauth")
+                    errors["base"] = "unknown"
                 else:
                     if creds:
                         self._user_inputs["qr_code_url"] = creds.pronote_url
@@ -270,8 +284,11 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     client = self._api_client._client
                     if client is None:
                         raise InvalidAuth
-                except (AuthenticationError, InvalidAuth, Exception):
+                except (AuthenticationError, InvalidAuth):
                     errors["base"] = "invalid_auth"
+                except Exception:
+                    _LOGGER.exception("Unexpected error during password reauth")
+                    errors["base"] = "unknown"
                 else:
                     return self.async_update_reload_and_abort(
                         self._get_reauth_entry(),
@@ -347,6 +364,19 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                         "alarm_offset",
                         default=config_entry.options.get("alarm_offset", DEFAULT_ALARM_OFFSET),
                     ): int,
+                    vol.Required(
+                        "grades_to_display",
+                        default=config_entry.options.get("grades_to_display", DEFAULT_GRADES_TO_DISPLAY),
+                    ): vol.All(
+                        NumberSelector(
+                            NumberSelectorConfig(min=1, max=50, mode=NumberSelectorMode.BOX),
+                        ),
+                        vol.Coerce(int),
+                    ),
+                    vol.Optional(
+                        "show_all_periods",
+                        default=config_entry.options.get("show_all_periods", DEFAULT_SHOW_ALL_PERIODS),
+                    ): bool,
                 }
             ),
         )
