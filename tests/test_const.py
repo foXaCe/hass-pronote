@@ -4,11 +4,11 @@ from homeassistant.const import Platform
 
 from custom_components.pronote.const import (
     DEFAULT_ALARM_OFFSET,
+    DEFAULT_GRADES_TO_DISPLAY,
     DEFAULT_LUNCH_BREAK_TIME,
     DEFAULT_REFRESH_INTERVAL,
     DOMAIN,
     EVALUATIONS_TO_DISPLAY,
-    GRADES_TO_DISPLAY,
     HOMEWORK_DESC_MAX_LENGTH,
     HOMEWORK_MAX_DAYS,
     INFO_SURVEY_LIMIT_MAX_DAYS,
@@ -39,7 +39,7 @@ def test_homework_constants():
 
 
 def test_display_constants():
-    assert GRADES_TO_DISPLAY == 11
+    assert DEFAULT_GRADES_TO_DISPLAY == 11
     assert EVALUATIONS_TO_DISPLAY == 15
 
 

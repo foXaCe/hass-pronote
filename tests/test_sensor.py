@@ -8,9 +8,9 @@ import pytest
 from slugify import slugify
 
 from custom_components.pronote.const import (
+    DEFAULT_GRADES_TO_DISPLAY,
     DOMAIN,
     EVALUATIONS_TO_DISPLAY,
-    GRADES_TO_DISPLAY,
 )
 from custom_components.pronote.coordinator import PronoteDataUpdateCoordinator
 from custom_components.pronote.sensor import (
@@ -683,14 +683,16 @@ class TestPronoteGradesSensor:
         assert attrs["is_current_period"] is False
 
     def test_extra_state_attributes_limits_display(self):
-        """Only GRADES_TO_DISPLAY - 1 grades should be shown."""
-        grades = [_make_grade(subject_name=f"Subject {i}") for i in range(GRADES_TO_DISPLAY + 5)]
-        coord = _make_coordinator()
+        """Only grades_to_display grades should be shown."""
+        grades = [_make_grade(subject_name=f"Subject {i}") for i in range(DEFAULT_GRADES_TO_DISPLAY + 5)]
+        coord = _make_coordinator(
+            options={"nickname": "Jean", "lunch_break_time": "13:00", "grades_to_display": DEFAULT_GRADES_TO_DISPLAY}
+        )
         coord.data["grades"] = grades
         sensor = PronoteGradesSensor(coord, key="grades", name="Grades", period_key="trimestre_1")
         attrs = sensor.extra_state_attributes
 
-        assert len(attrs["grades"]) == GRADES_TO_DISPLAY - 1
+        assert len(attrs["grades"]) == DEFAULT_GRADES_TO_DISPLAY
 
     def test_extra_state_attributes_empty_grades(self):
         coord = _make_coordinator()
