@@ -1,5 +1,36 @@
 # Changelog
 
+## [1.1.0] - 2026-02-12
+
+### Added
+
+- configurable grades limit per entity (1-50) via options flow
+- show all periods option for future period entities (per semester/trimester)
+- compact timetable format for period sensor (fixes 16KB attribute limit)
+- repairs support for session expiration, rate limiting and connection errors
+- MIT LICENSE file
+
+### Changed
+
+- Platinum-level API client with resilience patterns (retry, circuit breaker, rate limiting)
+- session reuse optimization (skip re-authentication when connected)
+- previous period data cache (past trimesters cached daily)
+- async authentication for proper executor handling
+- overall average normalization (French comma to float)
+- refresh time reduced from ~2.5s to ~1.2s
+
+### Fixed
+
+- calendar naive/aware datetime comparison error
+- missing translation keys for repair issues
+- missing option keys in Portuguese translations
+- repair flow translation key handling
+
+### Maintenance
+
+- update tests for refactored API and config flow
+- fix ruff formatting and lint errors
+
 ## [1.0.0] - 2026-02-10
 
 ### Added
