@@ -564,7 +564,7 @@ class PronoteAPIClient:
             date=getattr(grade, "date", date.today()),
             subject=subject_name,
             grade=str(getattr(grade, "grade", "")),
-            grade_out_of=str(getattr(grade, "grade_out_of", "")),
+            grade_out_of=str(getattr(grade, "out_of", "")),
             coefficient=str(getattr(grade, "coefficient", "")),
             class_average=str(getattr(grade, "average", "")),
             comment=getattr(grade, "comment", None),

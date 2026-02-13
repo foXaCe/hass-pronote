@@ -277,7 +277,7 @@ class TestClientConverters:
             date=date(2025, 1, 15),
             subject=SimpleNamespace(name="Math"),
             grade="15",
-            grade_out_of="20",
+            out_of="20",
             coefficient="1",
             average="14",
             comment="Good work",
