@@ -1,5 +1,11 @@
 # Changelog
 
+## [1.1.2] - 2026-02-13
+
+### Fixed
+
+- grade out_of field always empty due to wrong pronotepy attribute name (grade_out_of vs out_of)
+
 ## [1.1.1] - 2026-02-13
 
 ### Fixed
