@@ -418,18 +418,31 @@ class TestClientConverters:
 
     def test_convert_menu(self):
         client = PronoteAPIClient()
+        mock_label = SimpleNamespace(name="Bio", color="#00FF00")
+        mock_food = SimpleNamespace(name="Pizza", labels=[mock_label])
         mock_menu = SimpleNamespace(
             date=date(2025, 1, 15),
-            lunch=["Pizza", "Salad"],
-            dinner=["Soup", "Bread"],
+            name="Déjeuner",
+            is_lunch=True,
+            is_dinner=False,
+            first_meal=[mock_food],
+            main_meal=[mock_food],
+            side_meal=None,
+            other_meal=None,
+            cheese=None,
+            dessert=None,
         )
 
         result = client._convert_menu(mock_menu)
         assert result.date == date(2025, 1, 15)
-        assert result.lunch == ["Pizza", "Salad"]
-        assert result.dinner == ["Soup", "Bread"]
-        assert len(result.lunch) == 2
-        assert len(result.dinner) == 2
+        assert result.name == "Déjeuner"
+        assert result.is_lunch is True
+        assert result.is_dinner is False
+        assert len(result.first_meal) == 1
+        assert result.first_meal[0].name == "Pizza"
+        assert result.first_meal[0].labels[0].name == "Bio"
+        assert result.main_meal is not None
+        assert result.side_meal is None
 
     def test_convert_info_survey(self):
         client = PronoteAPIClient()
