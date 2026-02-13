@@ -160,7 +160,7 @@ def format_food_list(food_list) -> list:
 
     for food in food_list:
         formatted_food_labels = []
-        for label in food.labels:
+        for label in food.labels or []:
             formatted_food_labels.append(
                 {
                     "name": label.name,

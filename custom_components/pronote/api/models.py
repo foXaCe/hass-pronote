@@ -148,12 +148,35 @@ class InformationSurvey:
 
 
 @dataclass(slots=True, frozen=True)
+class FoodLabel:
+    """Représente un label alimentaire."""
+
+    name: str
+    color: str | None = None
+
+
+@dataclass(slots=True, frozen=True)
+class Food:
+    """Représente un aliment."""
+
+    name: str
+    labels: list[FoodLabel] | None = None
+
+
+@dataclass(slots=True, frozen=True)
 class Menu:
     """Représente un menu de cantine."""
 
     date: date
-    lunch: list[str] | None = None
-    dinner: list[str] | None = None
+    name: str | None = None
+    is_lunch: bool = False
+    is_dinner: bool = False
+    first_meal: list[Food] | None = None
+    main_meal: list[Food] | None = None
+    side_meal: list[Food] | None = None
+    other_meal: list[Food] | None = None
+    cheese: list[Food] | None = None
+    dessert: list[Food] | None = None
 
 
 @dataclass(slots=True, frozen=True)

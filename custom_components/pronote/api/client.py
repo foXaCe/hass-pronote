@@ -28,6 +28,8 @@ from .models import (
     Credentials,
     Delay,
     Evaluation,
+    Food,
+    FoodLabel,
     Grade,
     Homework,
     InformationSurvey,
@@ -666,12 +668,36 @@ class PronoteAPIClient:
             anonymous_response=getattr(info, "anonymous_response", False),
         )
 
+    def _convert_food_list(self, food_list) -> list[Food] | None:
+        """Convertit une liste d'aliments pronotepy."""
+        if not food_list:
+            return None
+        result = []
+        for food in food_list:
+            labels = None
+            raw_labels = getattr(food, "labels", None)
+            if raw_labels:
+                labels = [
+                    FoodLabel(
+                        name=getattr(lbl, "name", ""),
+                        color=getattr(lbl, "color", None),
+                    )
+                    for lbl in raw_labels
+                ]
+            result.append(Food(name=getattr(food, "name", ""), labels=labels))
+        return result or None
+
     def _convert_menu(self, menu) -> Menu:
         """Convertit un objet Menu pronotepy."""
-        lunch = getattr(menu, "lunch", None)
-        dinner = getattr(menu, "dinner", None)
         return Menu(
             date=getattr(menu, "date", date.today()),
-            lunch=list(lunch) if lunch else None,
-            dinner=list(dinner) if dinner else None,
+            name=getattr(menu, "name", None),
+            is_lunch=getattr(menu, "is_lunch", False),
+            is_dinner=getattr(menu, "is_dinner", False),
+            first_meal=self._convert_food_list(getattr(menu, "first_meal", None)),
+            main_meal=self._convert_food_list(getattr(menu, "main_meal", None)),
+            side_meal=self._convert_food_list(getattr(menu, "side_meal", None)),
+            other_meal=self._convert_food_list(getattr(menu, "other_meal", None)),
+            cheese=self._convert_food_list(getattr(menu, "cheese", None)),
+            dessert=self._convert_food_list(getattr(menu, "dessert", None)),
         )
