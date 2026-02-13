@@ -5,6 +5,8 @@ from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 from zoneinfo import ZoneInfo
 
+from homeassistant.util import dt as dt_util
+
 from custom_components.pronote.calendar import (
     PronoteCalendar,
     async_get_calendar_event_from_lessons,
@@ -163,11 +165,12 @@ class TestHandleCoordinatorUpdate:
 
     def test_current_event_found(self, mock_lesson):
         """When a lesson matches now, the event is set."""
-        now = datetime.now()
+        now = dt_util.now()
+        tz = ZoneInfo("Europe/Paris")
         lesson = mock_lesson(
             subject_name="Français",
-            start=now - timedelta(minutes=10),
-            end=now + timedelta(minutes=50),
+            start=now.astimezone(tz).replace(tzinfo=None) - timedelta(minutes=10),
+            end=now.astimezone(tz).replace(tzinfo=None) + timedelta(minutes=50),
             teacher="Mme Martin",
             room="B202",
         )

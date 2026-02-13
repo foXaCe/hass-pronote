@@ -95,15 +95,9 @@ class PronoteDataUpdateCoordinator(TimestampDataUpdateCoordinator):
                 raise ConfigEntryAuthFailed(f"Authentication failed with Pronote: {err}") from err
             except RateLimitError as err:
                 async_create_rate_limited_issue(self.hass, self.config_entry, err.retry_after)
-                raise UpdateFailed(
-                    f"Rate limited by Pronote: {err}",
-                    retry_after=err.retry_after,
-                ) from err
+                raise UpdateFailed(f"Rate limited by Pronote: {err}") from err
             except CircuitBreakerOpenError as err:
-                raise UpdateFailed(
-                    f"Pronote API temporarily unavailable: {err}",
-                    retry_after=300,
-                ) from err
+                raise UpdateFailed(f"Pronote API temporarily unavailable: {err}") from err
             except ConnectionError as err:
                 async_create_connection_error_issue(self.hass, self.config_entry, str(err))
                 raise UpdateFailed(f"Connection error with Pronote: {err}") from err
@@ -137,10 +131,7 @@ class PronoteDataUpdateCoordinator(TimestampDataUpdateCoordinator):
             async_delete_issue_for_entry(self.hass, self.config_entry, "rate_limited")
         except RateLimitError as err:
             async_create_rate_limited_issue(self.hass, self.config_entry, err.retry_after)
-            raise UpdateFailed(
-                f"Rate limited by Pronote: {err}",
-                retry_after=err.retry_after,
-            ) from err
+            raise UpdateFailed(f"Rate limited by Pronote: {err}") from err
         except AuthenticationError as err:
             self._api_client.reset()  # Force re-auth on next refresh
             async_create_session_expired_issue(self.hass, self.config_entry)
