@@ -1,5 +1,18 @@
 # Changelog
 
+## [1.1.1] - 2026-02-13
+
+### Fixed
+
+- menu sensor not loading due to incomplete data model conversion (missing meal categories and food labels)
+- format_food_list crash when food labels are None
+- UpdateFailed retry_after keyword not supported in current HA version
+
+### Maintenance
+
+- align all test fixtures with data model attributes (room, teacher, grade_out_of, etc.)
+- fix calendar test timezone-aware datetime comparison
+
 ## [1.1.0] - 2026-02-12
 
 ### Added
