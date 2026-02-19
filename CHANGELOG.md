@@ -1,5 +1,11 @@
 # Changelog
 
+## [1.1.3] - 2026-02-19
+
+### Fixed
+
+- repair flow 500 error on HA 2026.2 due to RepairsFlow.__init__() signature change
+
 ## [1.1.2] - 2026-02-13
 
 ### Fixed
