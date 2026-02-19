@@ -136,17 +136,13 @@ def async_delete_all_issues(
 class PronoteSessionExpiredRepairFlow(RepairsFlow):
     """Handler for session expired repair flow."""
 
-    def __init__(self, issue_id: str, data: dict[str, Any] | None) -> None:
-        """Initialize the repair flow."""
-        super().__init__(issue_id, data)
-        self._entry_id = data.get("entry_id") if data else None
-
     async def async_step_init(self, user_input: dict[str, str] | None = None) -> data_entry_flow.FlowResult:
         """Handle the initial step - redirect to reauth."""
-        if self._entry_id is None:
+        entry_id = self.data.get("entry_id") if self.data else None
+        if entry_id is None:
             return self.async_abort(reason="no_entry")
 
-        entry = self.hass.config_entries.async_get_entry(self._entry_id)
+        entry = self.hass.config_entries.async_get_entry(entry_id)
         if entry is None:
             return self.async_abort(reason="entry_not_found")
 
@@ -165,7 +161,8 @@ class PronoteSessionExpiredRepairFlow(RepairsFlow):
             )
 
         # Start the actual reauth flow
-        entry = self.hass.config_entries.async_get_entry(self._entry_id)
+        entry_id = self.data.get("entry_id") if self.data else None
+        entry = self.hass.config_entries.async_get_entry(entry_id) if entry_id else None
         if entry is None:
             return self.async_abort(reason="entry_not_found")
 
@@ -192,7 +189,7 @@ async def async_create_fix_flow(
 ) -> RepairsFlow:
     """Create a repair flow for the given issue."""
     if issue_id.startswith(f"{ISSUE_TYPE_SESSION_EXPIRED}_"):
-        return PronoteSessionExpiredRepairFlow(issue_id, data)
+        return PronoteSessionExpiredRepairFlow()
 
     # Other issue types are not fixable by the user (transient)
     raise HomeAssistantError(f"Issue {issue_id} is not fixable")
