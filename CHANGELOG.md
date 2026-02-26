@@ -1,5 +1,11 @@
 # Changelog
 
+## [1.1.6] - 2026-02-26
+
+### Fixed
+
+- session_expired repair issue not cleared after successful re-authentication, causing stale error banner in HA UI
+
 ## [1.1.5] - 2026-02-26
 
 ### Fixed
