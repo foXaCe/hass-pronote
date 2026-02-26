@@ -6,7 +6,10 @@ import logging
 import uuid
 from typing import Any
 
-import pronotepy
+# isort: off
+import custom_components.pronote._compat  # noqa: F401  # Patch autoslot before pronotepy
+import pronotepy  # noqa: E402
+# isort: on
 import voluptuous as vol
 from homeassistant import config_entries
 from homeassistant.core import callback
