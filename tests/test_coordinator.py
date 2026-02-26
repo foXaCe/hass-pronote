@@ -76,6 +76,7 @@ class TestPronoteDataUpdateCoordinator:
             coord._api_client.authenticate = AsyncMock()
             coord._api_client.fetch_all_data = AsyncMock()
             coord._api_client.is_authenticated = MagicMock(return_value=True)
+            coord._api_client.check_session = AsyncMock(return_value=True)
             coord.logger = MagicMock()
             coord._previous_period_cache = None
             coord._previous_period_cache_date = None
@@ -484,6 +485,7 @@ class TestCoordinatorAdditionalCoverage:
             coord._api_client.authenticate = AsyncMock()
             coord._api_client.fetch_all_data = AsyncMock()
             coord._api_client.is_authenticated = MagicMock(return_value=True)
+            coord._api_client.check_session = AsyncMock(return_value=True)
             coord.logger = MagicMock()
             coord._previous_period_cache = None
             coord._previous_period_cache_date = None
@@ -528,18 +530,17 @@ class TestCoordinatorAdditionalCoverage:
 
     @pytest.mark.asyncio
     async def test_async_update_data_auth_error_during_fetch(self, mock_coordinator):
-        """Test AuthenticationError handling during fetch."""
+        """Test AuthenticationError during fetch triggers reset and UpdateFailed (not ConfigEntryAuthFailed)."""
         from custom_components.pronote.api import AuthenticationError
 
         mock_coordinator._api_client.is_authenticated.return_value = True
         mock_coordinator._api_client.fetch_all_data.side_effect = AuthenticationError("Session expired")
 
-        with patch("custom_components.pronote.coordinator.async_create_session_expired_issue") as mock_create:
-            with patch("custom_components.pronote.coordinator.async_delete_issue_for_entry"):
-                with pytest.raises(ConfigEntryAuthFailed, match="Session expired"):
-                    await mock_coordinator._async_update_data()
+        with patch("custom_components.pronote.coordinator.async_delete_issue_for_entry"):
+            with pytest.raises(UpdateFailed, match="Session expired"):
+                await mock_coordinator._async_update_data()
 
-        mock_create.assert_called_once()
+        mock_coordinator._api_client.reset.assert_called_once()
 
     @pytest.mark.asyncio
     async def test_async_update_data_updates_qr_credentials(self, mock_coordinator):
