@@ -89,6 +89,7 @@ class PronoteDataUpdateCoordinator(TimestampDataUpdateCoordinator):
             try:
                 await self._api_client.authenticate(connection_type, config_data)
                 # Clear any transient issues after successful auth
+                async_delete_issue_for_entry(self.hass, self.config_entry, "session_expired")
                 async_delete_issue_for_entry(self.hass, self.config_entry, "connection_error")
                 async_delete_issue_for_entry(self.hass, self.config_entry, "rate_limited")
             except AuthenticationError as err:
