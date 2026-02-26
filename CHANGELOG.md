@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.1.4] - 2026-02-26
+
+### Fixed
+
+- session expiring every few days requiring manual re-authentication
+- add active session check (session_check) before each refresh cycle
+- use UpdateFailed instead of ConfigEntryAuthFailed on fetch session expiry for automatic retry
+
 ## [1.1.3] - 2026-02-19
 
 ### Fixed
