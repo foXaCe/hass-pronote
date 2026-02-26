@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.1.5] - 2026-02-26
+
+### Fixed
+
+- autoslot _compat patch breaking Period.__slots__ on Python 3.14+ (missing LOAD_FAST_BORROW opcodes)
+- _compat now detects dynamically if patching is needed instead of always overriding
+- ensure _compat is imported before pronotepy in config_flow.py for reauth code paths
+
 ## [1.1.4] - 2026-02-26
 
 ### Fixed
