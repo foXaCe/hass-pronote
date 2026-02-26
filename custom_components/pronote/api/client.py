@@ -139,8 +139,27 @@ class PronoteAPIClient:
             raise AuthenticationError(f"Authentification inattendue: {err}") from err
 
     def is_authenticated(self) -> bool:
-        """Vérifie si le client est authentifié."""
+        """Vérifie si le client est authentifié (simple check, pas de réseau)."""
         return self._client is not None
+
+    async def check_session(self) -> bool:
+        """Vérifie si la session pronotepy est toujours active (appel réseau).
+
+        Returns:
+            True si la session est valide, False sinon.
+        """
+        if self._client is None:
+            return False
+        try:
+            if self.hass:
+                await self.hass.async_add_executor_job(self._client.session_check)
+            else:
+                self._client.session_check()
+            return True
+        except Exception:
+            _LOGGER.debug("Session check failed, session expired")
+            self._client = None
+            return False
 
     def reset(self) -> None:
         """Reset le client pour forcer une re-authentification."""

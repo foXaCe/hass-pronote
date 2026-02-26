@@ -82,9 +82,10 @@ class PronoteDataUpdateCoordinator(TimestampDataUpdateCoordinator):
         config_data = dict(self.config_entry.data)
         connection_type = config_data.get("connection_type", "username_password")
 
-        # Authentication (skip if already connected)
+        # Authentication (skip if session still active)
         t_auth_start = time.perf_counter()
-        if not self._api_client.is_authenticated():
+        session_valid = await self._api_client.check_session() if self._api_client.is_authenticated() else False
+        if not session_valid:
             try:
                 await self._api_client.authenticate(connection_type, config_data)
                 # Clear any transient issues after successful auth
@@ -134,8 +135,8 @@ class PronoteDataUpdateCoordinator(TimestampDataUpdateCoordinator):
             raise UpdateFailed(f"Rate limited by Pronote: {err}") from err
         except AuthenticationError as err:
             self._api_client.reset()  # Force re-auth on next refresh
-            async_create_session_expired_issue(self.hass, self.config_entry)
-            raise ConfigEntryAuthFailed(f"Session expired: {err}") from err
+            _LOGGER.warning("Session expired during fetch, will re-authenticate on next cycle: %s", err)
+            raise UpdateFailed(f"Session expired, will retry: {err}") from err
         except InvalidResponseError as err:
             self._api_client.reset()
             raise UpdateFailed(f"Invalid response from Pronote: {err}") from err
