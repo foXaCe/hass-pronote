@@ -164,10 +164,14 @@ class PronoteAuth:
                 )
                 return client, credentials
             except Exception as err:
-                _LOGGER.warning("Token login échoué, tentative QR code: %s", err)
-                # Continue vers QR code login
+                _LOGGER.error("Token login échoué: %s - %s", type(err).__name__, err)
+                # Don't fall through to QR code login — QR codes expire after 10 minutes
+                # and cannot be reused. User must re-scan a new QR code.
+                raise AuthenticationError(
+                    f"Token expiré, veuillez reconfigurer l'intégration avec un nouveau QR code: {err}"
+                ) from err
 
-        # Premier login avec QR code
+        # Premier login avec QR code (initial setup only)
         if "qr_code_json" not in data:
             _LOGGER.error("Aucun QR code JSON dans les données: %s", list(data.keys()))
             raise AuthenticationError("Aucun QR code ou token sauvegardé")

@@ -109,6 +109,9 @@ class PronoteDataUpdateCoordinator(TimestampDataUpdateCoordinator):
             if not self._api_client.is_authenticated():
                 async_create_session_expired_issue(self.hass, self.config_entry)
                 raise ConfigEntryAuthFailed("Unable to authenticate with Pronote")
+
+            # Save credentials immediately after successful auth (token is single-use)
+            self._save_credentials_if_needed(config_data, connection_type)
         else:
             _LOGGER.debug("TIMING: auth skipped (reusing session)")
 
@@ -153,18 +156,6 @@ class PronoteDataUpdateCoordinator(TimestampDataUpdateCoordinator):
         if pronote_data.previous_period_data:
             self._previous_period_cache = pronote_data.previous_period_data
             self._previous_period_cache_date = today
-
-        # Save refreshed credentials for QR code connections
-        if connection_type == "qrcode" and pronote_data.credentials:
-            new_data = config_data.copy()
-            # Save refreshed token credentials for next token_login
-            new_data["qr_code_url"] = pronote_data.credentials["pronote_url"]
-            new_data["qr_code_username"] = pronote_data.credentials["username"]
-            new_data["qr_code_password"] = pronote_data.password
-            new_data["qr_code_uuid"] = pronote_data.credentials["uuid"]
-            new_data["client_identifier"] = pronote_data.credentials["client_identifier"]
-
-            self.hass.config_entries.async_update_entry(self.config_entry, data=new_data)
 
         t_fetch_end = time.perf_counter()
         _LOGGER.debug("TIMING: fetch_all_data=%.3fs", t_fetch_end - t_fetch_start)
@@ -219,6 +210,30 @@ class PronoteDataUpdateCoordinator(TimestampDataUpdateCoordinator):
         self._compare_and_fire_events(previous_data)
 
         return self.data
+
+    def _save_credentials_if_needed(self, config_data: dict[str, Any], connection_type: str) -> None:
+        """Save refreshed credentials immediately after auth for QR code connections.
+
+        Tokens are single-use: once used to authenticate, the old token is
+        invalidated server-side and a new one is generated. We must persist the
+        new token right away to avoid losing it if a subsequent fetch fails.
+        """
+        if connection_type != "qrcode":
+            return
+
+        credentials = self._api_client.get_credentials()
+        if not credentials:
+            return
+
+        new_data = config_data.copy()
+        new_data["qr_code_url"] = credentials.pronote_url
+        new_data["qr_code_username"] = credentials.username
+        new_data["qr_code_password"] = credentials.password
+        new_data["qr_code_uuid"] = credentials.uuid
+        new_data["client_identifier"] = credentials.client_identifier
+
+        self.hass.config_entries.async_update_entry(self.config_entry, data=new_data)
+        _LOGGER.debug("Credentials saved to config entry after auth")
 
     def _compute_next_alarm(
         self,

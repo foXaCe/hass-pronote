@@ -161,10 +161,17 @@ class PronoteAPIClient:
             self._client = None
             return False
 
+    def get_credentials(self) -> Credentials | None:
+        """Return the current credentials (for persisting after auth)."""
+        return self._credentials
+
     def reset(self) -> None:
-        """Reset le client pour forcer une re-authentification."""
+        """Reset le client pour forcer une re-authentification.
+
+        Note: credentials are preserved so they can still be persisted
+        to the config entry if needed.
+        """
         self._client = None
-        self._credentials = None
 
     async def fetch_all_data(
         self,
