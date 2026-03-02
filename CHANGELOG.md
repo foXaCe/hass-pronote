@@ -1,5 +1,14 @@
 # Changelog
 
+## [1.1.7] - 2026-03-02
+
+### Fixed
+
+- QR code token lost on fetch failure causing permanent disconnection (token is single-use and was only saved after fetch, not after auth)
+- persist new token to config entry immediately after successful authentication
+- remove dead QR code fallback that always fails with expired code
+- preserve credentials in memory on client reset
+
 ## [1.1.6] - 2026-02-26
 
 ### Fixed
