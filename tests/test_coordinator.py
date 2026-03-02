@@ -543,8 +543,10 @@ class TestCoordinatorAdditionalCoverage:
         mock_coordinator._api_client.reset.assert_called_once()
 
     @pytest.mark.asyncio
-    async def test_async_update_data_updates_qr_credentials(self, mock_coordinator):
-        """Test QR code credentials are updated after successful fetch."""
+    async def test_async_update_data_saves_qr_credentials_after_auth(self, mock_coordinator):
+        """Test QR code credentials are saved immediately after successful auth."""
+        from custom_components.pronote.api.models import Credentials
+
         mock_pronote_data = MagicMock()
         mock_pronote_data.child_info = SimpleNamespace(name="Test Student")
         mock_pronote_data.lessons_today = []
@@ -569,16 +571,20 @@ class TestCoordinatorAdditionalCoverage:
         mock_pronote_data.active_periods = []
         mock_pronote_data.ical_url = None
         mock_pronote_data.previous_period_data = {}
-        mock_pronote_data.credentials = {
-            "pronote_url": "https://example.com",
-            "username": "new_user",
-            "uuid": "new_uuid",
-            "client_identifier": "new_client_id",
-        }
-        mock_pronote_data.password = "new_password"
+        mock_pronote_data.credentials = None
+        mock_pronote_data.password = None
 
+        # Session invalid → force re-auth
+        mock_coordinator._api_client.check_session = AsyncMock(return_value=False)
         mock_coordinator._api_client.is_authenticated.return_value = True
         mock_coordinator._api_client.fetch_all_data.return_value = mock_pronote_data
+        mock_coordinator._api_client.get_credentials.return_value = Credentials(
+            pronote_url="https://example.com",
+            username="new_user",
+            password="new_token",
+            uuid="new_uuid",
+            client_identifier="new_client_id",
+        )
         mock_coordinator.config_entry.data = {
             "connection_type": "qrcode",
             "account_type": "student",
@@ -593,13 +599,13 @@ class TestCoordinatorAdditionalCoverage:
 
         assert result is not None
         mock_update.assert_called_once()
-        # Verify that qr_code_json and qr_code_pin are preserved as backup
         call_kwargs = mock_update.call_args[1]
         assert "data" in call_kwargs
-        assert call_kwargs["data"]["qr_code_json"] == '{"old":"data"}'  # Preserved
-        assert call_kwargs["data"]["qr_code_pin"] == "1234"  # Preserved
         assert call_kwargs["data"]["qr_code_url"] == "https://example.com"
-        assert call_kwargs["data"]["qr_code_password"] == "new_password"
+        assert call_kwargs["data"]["qr_code_username"] == "new_user"
+        assert call_kwargs["data"]["qr_code_password"] == "new_token"
+        assert call_kwargs["data"]["qr_code_uuid"] == "new_uuid"
+        assert call_kwargs["data"]["client_identifier"] == "new_client_id"
 
     @pytest.mark.asyncio
     async def test_async_update_data_with_previous_period_data(self, mock_coordinator):
