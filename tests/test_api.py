@@ -1198,8 +1198,8 @@ class TestPronoteAuthQRCode:
         assert creds.username == "user"
         assert creds.password == "new_password"
 
-    def test_auth_qrcode_token_login_failure_raises_auth_error(self):
-        """Test _auth_qrcode raises AuthenticationError when token_login fails (no QR fallback)."""
+    def test_auth_qrcode_token_login_failure_raises_auth_error_without_qr(self):
+        """Test _auth_qrcode raises AuthenticationError when token_login fails and no QR code available."""
         auth = PronoteAuth()
 
         data = {
@@ -1214,6 +1214,34 @@ class TestPronoteAuthQRCode:
         ):
             with pytest.raises(AuthenticationError, match="Token expiré"):
                 auth._auth_qrcode(data, "student")
+
+    def test_auth_qrcode_token_login_failure_falls_back_to_qr_if_available(self):
+        """Test _auth_qrcode falls back to qrcode_login when token_login fails and fresh QR code is available."""
+        auth = PronoteAuth()
+        mock_client = MagicMock()
+        mock_client.password = "new_password"
+        mock_client.export_credentials.return_value = {
+            "pronote_url": "https://example.com",
+            "username": "user",
+            "uuid": "uuid123",
+        }
+
+        data = {
+            "qr_code_url": "https://example.com",
+            "qr_code_username": "user",
+            "qr_code_password": "old_password",
+            "qr_code_uuid": "uuid123",
+            "qr_code_json": '{"login":"abc","jeton":"def","url":"https://example.com/pronote/mobile.eleve.html"}',
+            "qr_code_pin": "1234",
+        }
+
+        with patch(
+            "custom_components.pronote.api.auth.pronotepy.Client.token_login", side_effect=Exception("Token failed")
+        ):
+            with patch("custom_components.pronote.api.auth.pronotepy.Client.qrcode_login", return_value=mock_client):
+                client, creds = auth._auth_qrcode(data, "student")
+
+        assert client == mock_client
 
     def test_auth_qrcode_json_decode_error(self):
         """Test _auth_qrcode raises InvalidResponseError on JSON decode error."""
