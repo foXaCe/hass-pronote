@@ -1,5 +1,11 @@
 # Changelog
 
+## [1.1.8] - 2026-03-03
+
+### Fixed
+
+- allow QR code fallback when fresh QR is available during reauth (v1.1.7 was too aggressive and blocked all fallback, even with a fresh QR code from the reauth flow)
+
 ## [1.1.7] - 2026-03-02
 
 ### Fixed
