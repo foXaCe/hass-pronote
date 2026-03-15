@@ -232,8 +232,13 @@ class PronoteDataUpdateCoordinator(TimestampDataUpdateCoordinator):
         new_data["qr_code_uuid"] = credentials.uuid
         new_data["client_identifier"] = credentials.client_identifier
 
+        # Remove single-use QR code data — it cannot be reused and would
+        # cause a stale fallback attempt on next token_login failure.
+        new_data.pop("qr_code_json", None)
+        new_data.pop("qr_code_pin", None)
+
         self.hass.config_entries.async_update_entry(self.config_entry, data=new_data)
-        _LOGGER.debug("Credentials saved to config entry after auth")
+        _LOGGER.debug("Credentials saved to config entry after auth (qr_code_json removed)")
 
     def _compute_next_alarm(
         self,

@@ -606,6 +606,9 @@ class TestCoordinatorAdditionalCoverage:
         assert call_kwargs["data"]["qr_code_password"] == "new_token"
         assert call_kwargs["data"]["qr_code_uuid"] == "new_uuid"
         assert call_kwargs["data"]["client_identifier"] == "new_client_id"
+        # Single-use QR code data must be removed after successful auth
+        assert "qr_code_json" not in call_kwargs["data"]
+        assert "qr_code_pin" not in call_kwargs["data"]
 
     @pytest.mark.asyncio
     async def test_async_update_data_with_previous_period_data(self, mock_coordinator):
