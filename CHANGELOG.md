@@ -1,5 +1,15 @@
 # Changelog
 
+## [1.1.9] - 2026-03-15
+
+### Fixed
+
+- remove stale qr_code_json from config entry after successful auth to prevent expired QR code fallback causing repeated disconnections
+
+### Changed
+
+- bump actions/upload-artifact from 6 to 7
+
 ## [1.1.8] - 2026-03-03
 
 ### Fixed
