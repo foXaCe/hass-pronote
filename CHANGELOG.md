@@ -1,5 +1,16 @@
 # Changelog
 
+## [1.1.10] - 2026-03-27
+
+### Fixed
+
+- use export_credentials after token_login to keep uuid in sync with server (fixes disconnection every 2-3 days)
+
+### Changed
+
+- bump pronotepy from 2.14.5 to 2.14.6
+- bump softprops/action-gh-release from 2.5.0 to 2.6.1
+
 ## [1.1.9] - 2026-03-15
 
 ### Fixed
