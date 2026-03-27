@@ -98,7 +98,7 @@ jobs:
           zip pronote.zip -r ./
 
       - name: Create GitHub release
-        uses: softprops/action-gh-release@v2.5.0
+        uses: softprops/action-gh-release@v2.6.1
         with:
           body_path: ${{ github.workspace }}/CHANGELOG.md
           files: ${{ github.workspace }}/custom_components/pronote/pronote.zip
