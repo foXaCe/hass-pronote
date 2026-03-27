@@ -155,12 +155,13 @@ class PronoteAuth:
                     client_identifier=data.get("client_identifier"),
                 )
 
+                exported = client.export_credentials()
                 credentials = Credentials(
-                    pronote_url=data["qr_code_url"],
-                    username=data["qr_code_username"],
-                    password=client.password if hasattr(client, "password") else data.get("qr_code_password", ""),
-                    uuid=data.get("qr_code_uuid"),
-                    client_identifier=data.get("client_identifier"),
+                    pronote_url=exported.get("pronote_url", data["qr_code_url"]),
+                    username=exported.get("username", data["qr_code_username"]),
+                    password=exported.get("password", data.get("qr_code_password", "")),
+                    uuid=exported.get("uuid", data.get("qr_code_uuid")),
+                    client_identifier=exported.get("client_identifier", data.get("client_identifier")),
                 )
                 return client, credentials
             except Exception as err:
