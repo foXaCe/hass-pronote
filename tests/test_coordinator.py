@@ -585,6 +585,9 @@ class TestCoordinatorAdditionalCoverage:
             uuid="new_uuid",
             client_identifier="new_client_id",
         )
+        # Set live client password to match saved credentials (no drift)
+        mock_coordinator._api_client._client = MagicMock()
+        mock_coordinator._api_client._client.password = "new_token"
         mock_coordinator.config_entry.data = {
             "connection_type": "qrcode",
             "account_type": "student",
@@ -592,12 +595,21 @@ class TestCoordinatorAdditionalCoverage:
             "qr_code_pin": "1234",
         }
 
+        def update_entry_side_effect(entry, **kwargs):
+            if "data" in kwargs:
+                entry.data = kwargs["data"]
+
         with patch("custom_components.pronote.coordinator.async_delete_issue_for_entry"):
-            with patch.object(mock_coordinator.hass.config_entries, "async_update_entry") as mock_update:
+            with patch.object(
+                mock_coordinator.hass.config_entries,
+                "async_update_entry",
+                side_effect=update_entry_side_effect,
+            ) as mock_update:
                 with patch.object(mock_coordinator, "_compare_and_fire_events"):
                     result = await mock_coordinator._async_update_data()
 
         assert result is not None
+        # Called once by _save_credentials_if_needed (no drift since live password matches)
         mock_update.assert_called_once()
         call_kwargs = mock_update.call_args[1]
         assert "data" in call_kwargs
@@ -609,6 +621,137 @@ class TestCoordinatorAdditionalCoverage:
         # Single-use QR code data must be removed after successful auth
         assert "qr_code_json" not in call_kwargs["data"]
         assert "qr_code_pin" not in call_kwargs["data"]
+
+    @pytest.mark.asyncio
+    async def test_check_token_drift_detects_silent_rotation(self, mock_coordinator):
+        """Test _check_token_drift detects when pronotepy silently rotates the token."""
+        mock_pronote_data = MagicMock()
+        mock_pronote_data.child_info = SimpleNamespace(name="Test Student")
+        mock_pronote_data.lessons_today = []
+        mock_pronote_data.lessons_tomorrow = []
+        mock_pronote_data.lessons_next_day = []
+        mock_pronote_data.lessons_period = []
+        mock_pronote_data.grades = []
+        mock_pronote_data.averages = []
+        mock_pronote_data.overall_average = None
+        mock_pronote_data.absences = []
+        mock_pronote_data.delays = []
+        mock_pronote_data.punishments = []
+        mock_pronote_data.evaluations = []
+        mock_pronote_data.homework = []
+        mock_pronote_data.homework_period = []
+        mock_pronote_data.information_and_surveys = []
+        mock_pronote_data.menus = []
+        mock_pronote_data.periods = []
+        mock_pronote_data.current_period = None
+        mock_pronote_data.current_period_key = None
+        mock_pronote_data.previous_periods = []
+        mock_pronote_data.active_periods = []
+        mock_pronote_data.ical_url = None
+        mock_pronote_data.previous_period_data = {}
+
+        # Session is valid → reuse path (no authenticate call)
+        mock_coordinator._api_client.is_authenticated.return_value = True
+        mock_coordinator._api_client.check_session = AsyncMock(return_value=True)
+        mock_coordinator._api_client.fetch_all_data.return_value = mock_pronote_data
+
+        # Simulate pronotepy silently rotating the password during fetch
+        mock_client = MagicMock()
+        mock_client.password = "silently_rotated_token"
+        mock_client.export_credentials.return_value = {
+            "pronote_url": "https://example.com",
+            "username": "user",
+            "password": "silently_rotated_token",
+            "uuid": "uuid123",
+            "client_identifier": "client_id",
+        }
+        mock_coordinator._api_client._client = mock_client
+        # Make get_credentials() read _credentials dynamically (not a fixed mock)
+        mock_coordinator._api_client.get_credentials = lambda: mock_coordinator._api_client._credentials
+
+        # Config entry has old password
+        mock_coordinator.config_entry.data = {
+            "connection_type": "qrcode",
+            "account_type": "student",
+            "qr_code_url": "https://example.com",
+            "qr_code_username": "user",
+            "qr_code_password": "old_token",
+            "qr_code_uuid": "uuid123",
+            "client_identifier": "client_id",
+        }
+
+        def update_entry_side_effect(entry, **kwargs):
+            if "data" in kwargs:
+                entry.data = kwargs["data"]
+
+        with patch("custom_components.pronote.coordinator.async_delete_issue_for_entry"):
+            with patch.object(
+                mock_coordinator.hass.config_entries,
+                "async_update_entry",
+                side_effect=update_entry_side_effect,
+            ) as mock_update:
+                with patch.object(mock_coordinator, "_compare_and_fire_events"):
+                    await mock_coordinator._async_update_data()
+
+        # Drift detected → credentials persisted
+        mock_update.assert_called()
+        last_call_kwargs = mock_update.call_args[1]
+        assert last_call_kwargs["data"]["qr_code_password"] == "silently_rotated_token"
+
+    @pytest.mark.asyncio
+    async def test_check_token_drift_no_drift_no_update(self, mock_coordinator):
+        """Test _check_token_drift does nothing when password hasn't changed."""
+        mock_pronote_data = MagicMock()
+        mock_pronote_data.child_info = SimpleNamespace(name="Test Student")
+        mock_pronote_data.lessons_today = []
+        mock_pronote_data.lessons_tomorrow = []
+        mock_pronote_data.lessons_next_day = []
+        mock_pronote_data.lessons_period = []
+        mock_pronote_data.grades = []
+        mock_pronote_data.averages = []
+        mock_pronote_data.overall_average = None
+        mock_pronote_data.absences = []
+        mock_pronote_data.delays = []
+        mock_pronote_data.punishments = []
+        mock_pronote_data.evaluations = []
+        mock_pronote_data.homework = []
+        mock_pronote_data.homework_period = []
+        mock_pronote_data.information_and_surveys = []
+        mock_pronote_data.menus = []
+        mock_pronote_data.periods = []
+        mock_pronote_data.current_period = None
+        mock_pronote_data.current_period_key = None
+        mock_pronote_data.previous_periods = []
+        mock_pronote_data.active_periods = []
+        mock_pronote_data.ical_url = None
+        mock_pronote_data.previous_period_data = {}
+
+        # Session is valid → reuse path
+        mock_coordinator._api_client.is_authenticated.return_value = True
+        mock_coordinator._api_client.check_session = AsyncMock(return_value=True)
+        mock_coordinator._api_client.fetch_all_data.return_value = mock_pronote_data
+
+        # Live password matches stored password — no drift
+        mock_client = MagicMock()
+        mock_client.password = "same_token"
+        mock_coordinator._api_client._client = mock_client
+
+        mock_coordinator.config_entry.data = {
+            "connection_type": "qrcode",
+            "account_type": "student",
+            "qr_code_url": "https://example.com",
+            "qr_code_username": "user",
+            "qr_code_password": "same_token",
+            "qr_code_uuid": "uuid123",
+        }
+
+        with patch("custom_components.pronote.coordinator.async_delete_issue_for_entry"):
+            with patch.object(mock_coordinator.hass.config_entries, "async_update_entry") as mock_update:
+                with patch.object(mock_coordinator, "_compare_and_fire_events"):
+                    await mock_coordinator._async_update_data()
+
+        # No drift → no update call
+        mock_update.assert_not_called()
 
     @pytest.mark.asyncio
     async def test_async_update_data_with_previous_period_data(self, mock_coordinator):

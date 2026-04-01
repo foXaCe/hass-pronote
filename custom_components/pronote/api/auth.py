@@ -156,6 +156,7 @@ class PronoteAuth:
                 )
 
                 exported = client.export_credentials()
+                _LOGGER.debug("Pronote token_login succeeded, new credentials exported")
                 credentials = Credentials(
                     pronote_url=exported.get("pronote_url", data["qr_code_url"]),
                     username=exported.get("username", data["qr_code_username"]),
@@ -198,7 +199,7 @@ class PronoteAuth:
             credentials = Credentials(
                 pronote_url=exported.get("pronote_url", ""),
                 username=exported.get("username", ""),
-                password=client.password if hasattr(client, "password") else "",
+                password=exported.get("password", ""),
                 uuid=exported.get("uuid"),
                 client_identifier=exported.get("client_identifier"),
             )

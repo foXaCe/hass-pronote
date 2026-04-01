@@ -17,6 +17,7 @@ from .api import (
     AuthenticationError,
     CircuitBreakerOpenError,
     ConnectionError,
+    Credentials,
     InvalidResponseError,
     Lesson,
     PronoteAPIClient,
@@ -114,6 +115,8 @@ class PronoteDataUpdateCoordinator(TimestampDataUpdateCoordinator):
             self._save_credentials_if_needed(config_data, connection_type)
         else:
             _LOGGER.debug("TIMING: auth skipped (reusing session)")
+            # session_check() calls post() which can trigger an internal refresh()
+            self._check_token_drift(config_data, connection_type)
 
         t_auth_end = time.perf_counter()
         _LOGGER.debug("TIMING: auth=%.3fs", t_auth_end - t_auth_start)
@@ -151,6 +154,9 @@ class PronoteDataUpdateCoordinator(TimestampDataUpdateCoordinator):
         except Exception as err:
             self._api_client.reset()
             raise UpdateFailed(f"Error fetching data from Pronote: {err}") from err
+
+        # Detect silent internal token rotation by pronotepy's auto-refresh
+        self._check_token_drift(config_data, connection_type)
 
         # Update previous_period_cache after successful fetch
         if pronote_data.previous_period_data:
@@ -223,6 +229,7 @@ class PronoteDataUpdateCoordinator(TimestampDataUpdateCoordinator):
 
         credentials = self._api_client.get_credentials()
         if not credentials:
+            _LOGGER.warning("Pronote token refresh returned no credentials — persistence skipped")
             return
 
         new_data = config_data.copy()
@@ -238,7 +245,43 @@ class PronoteDataUpdateCoordinator(TimestampDataUpdateCoordinator):
         new_data.pop("qr_code_pin", None)
 
         self.hass.config_entries.async_update_entry(self.config_entry, data=new_data)
-        _LOGGER.debug("Credentials saved to config entry after auth (qr_code_json removed)")
+        _LOGGER.debug("Pronote token updated and persisted to config entry successfully")
+
+    def _check_token_drift(self, config_data: dict[str, Any], connection_type: str) -> None:
+        """Detect and persist silent token rotation by pronotepy's internal refresh().
+
+        pronotepy's post() can trigger self.refresh() → _login() on transient
+        server errors, which updates client.password silently. If we don't
+        persist this, the next HA restart uses a stale token.
+        """
+        if connection_type != "qrcode":
+            return
+
+        client = self._api_client._client
+        if client is None:
+            return
+
+        live_password = getattr(client, "password", None)
+        if not live_password:
+            return
+
+        # Read from the current config entry (not the stale copy from start of refresh)
+        current_data = dict(self.config_entry.data)
+        stored_password = current_data.get("qr_code_password")
+        if live_password == stored_password:
+            return
+
+        _LOGGER.debug("Pronote: silent internal token rotation detected and persisted")
+        # Update in-memory credentials so _save_credentials_if_needed uses the live values
+        exported = client.export_credentials()
+        self._api_client._credentials = Credentials(
+            pronote_url=exported.get("pronote_url", current_data.get("qr_code_url", "")),
+            username=exported.get("username", current_data.get("qr_code_username", "")),
+            password=exported.get("password", live_password),
+            uuid=exported.get("uuid", current_data.get("qr_code_uuid")),
+            client_identifier=exported.get("client_identifier", current_data.get("client_identifier")),
+        )
+        self._save_credentials_if_needed(current_data, connection_type)
 
     def _compute_next_alarm(
         self,
