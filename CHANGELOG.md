@@ -1,5 +1,11 @@
 # Changelog
 
+## [1.1.11] - 2026-04-01
+
+### Fixed
+
+- detect and persist silent token rotation by pronotepy's internal auto-refresh mechanism (prevents stale token after HA restart)
+
 ## [1.1.10] - 2026-03-27
 
 ### Fixed
