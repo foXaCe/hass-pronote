@@ -1,0 +1,119 @@
+name: Security audit
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  schedule:
+    - cron: "0 6 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: security-audit-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  python-audit:
+    name: Security audit
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install pip-audit
+        run: pipx install pip-audit
+
+      - name: Audit manifest.json (HA integration requirements)
+        run: |
+          for m in $(find custom_components -name manifest.json); do
+            if jq -e '.requirements' "$m" >/dev/null 2>&1; then
+              jq -r '.requirements[]' "$m" > /tmp/m_reqs.txt
+              [ -s /tmp/m_reqs.txt ] && pip-audit --requirement /tmp/m_reqs.txt --strict
+            fi
+          done
+
+      - name: Audit requirements_dev / test
+        run: |
+          for r in requirements_dev.txt requirements_test.txt requirements.txt; do
+            [ -f "$r" ] && pip-audit --requirement "$r" || echo "⚠ CVE dev/test (framework homeassistant épinglé par pytest-homeassistant-custom-component) — Renovate gère le bump"
+          done
+
+  osv-scanner:
+    name: OSV-Scanner
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - name: Generate runtime requirements from manifest
+        run: |
+          jq -r '.requirements[]' custom_components/pronote/manifest.json > requirements-runtime.txt
+          cat requirements-runtime.txt
+      - uses: google/osv-scanner-action/osv-scanner-action@v2.5.0
+        with:
+          scan-args: |
+            --recursive
+            --no-resolve
+            requirements-runtime.txt
+        continue-on-error: false
+
+  secret-scan:
+    name: Gitleaks
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  lockfile-freshness:
+    name: Lockfile age check
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - name: Check lockfile age
+        run: |
+          for lock in package-lock.json yarn.lock pnpm-lock.yaml poetry.lock Pipfile.lock Cargo.lock; do
+            [ -f "$lock" ] || continue
+            AGE=$(( ($(date +%s) - $(git log -1 --format=%ct -- "$lock")) / 86400 ))
+            if [ $AGE -gt 90 ]; then
+              echo "::error file=$lock::$lock non régénéré depuis $AGE jours → CVE probables, lancer le manager (npm install / poetry update / etc.)"
+              exit 1
+            elif [ $AGE -gt 60 ]; then
+              echo "::warning file=$lock::$lock vieillit ($AGE jours)"
+            fi
+          done
+
+  dependency-review:
+    name: Dependency review
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    if: ${{ github.event_name == 'pull_request' }}
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/dependency-review-action@v5
+        with:
+          fail-on-severity: high
+          comment-summary-in-pr: on-failure

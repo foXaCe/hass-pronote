@@ -1239,11 +1239,13 @@ class TestPronoteAuthQRCode:
             "qr_code_uuid": "uuid123",
         }
 
-        with patch(
-            "custom_components.pronote.api.auth.pronotepy.Client.token_login", side_effect=Exception("Token failed")
+        with (
+            patch(
+                "custom_components.pronote.api.auth.pronotepy.Client.token_login", side_effect=Exception("Token failed")
+            ),
+            pytest.raises(AuthenticationError, match="Token expiré"),
         ):
-            with pytest.raises(AuthenticationError, match="Token expiré"):
-                auth._auth_qrcode(data, "student")
+            auth._auth_qrcode(data, "student")
 
     def test_auth_qrcode_token_login_failure_falls_back_to_qr_if_available(self):
         """Test _auth_qrcode falls back to qrcode_login when token_login fails and fresh QR code is available."""
@@ -1265,11 +1267,13 @@ class TestPronoteAuthQRCode:
             "qr_code_pin": "1234",
         }
 
-        with patch(
-            "custom_components.pronote.api.auth.pronotepy.Client.token_login", side_effect=Exception("Token failed")
+        with (
+            patch(
+                "custom_components.pronote.api.auth.pronotepy.Client.token_login", side_effect=Exception("Token failed")
+            ),
+            patch("custom_components.pronote.api.auth.pronotepy.Client.qrcode_login", return_value=mock_client),
         ):
-            with patch("custom_components.pronote.api.auth.pronotepy.Client.qrcode_login", return_value=mock_client):
-                client, creds = auth._auth_qrcode(data, "student")
+            client, creds = auth._auth_qrcode(data, "student")
 
         assert client == mock_client
 

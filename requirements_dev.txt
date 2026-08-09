@@ -1,0 +1,4 @@
+-r requirements_test.txt
+ruff==0.16.2
+mypy>=1.13
+prek

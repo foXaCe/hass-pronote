@@ -36,10 +36,17 @@ known-first-party = ["custom_components.pronote"]
 
 [tool.mypy]
 python_version = "3.12"
-ignore_missing_imports = true
-follow_imports = "silent"
 warn_return_any = true
 warn_unused_configs = true
+explicit_package_bases = true
+mypy_path = "$MYPY_CONFIG_FILE_DIR"
+namespace_packages = true
+ignore_missing_imports = true
+follow_imports = "silent"
+
+[[tool.mypy.overrides]]
+module = "tests.*"
+disallow_untyped_defs = false
 
 [tool.coverage.run]
 source = ["custom_components/pronote"]

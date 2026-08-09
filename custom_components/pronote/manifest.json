@@ -2,12 +2,13 @@
   "domain": "pronote",
   "name": "Pronote",
   "codeowners": [
-    "@delphiki"
+    "@foXaCe"
   ],
   "config_flow": true,
-  "documentation": "https://github.com/delphiki/hass-pronote",
+  "documentation": "https://github.com/foXaCe/hass-pronote",
+  "integration_type": "service",
   "iot_class": "cloud_polling",
-  "issue_tracker": "https://github.com/delphiki/hass-pronote/issues",
+  "issue_tracker": "https://github.com/foXaCe/hass-pronote/issues",
   "loggers": ["custom_components.pronote", "pronotepy"],
   "requirements": [
     "pronotepy==2.14.6",
