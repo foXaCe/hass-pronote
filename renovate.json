@@ -23,7 +23,7 @@
   "prConcurrentLimit": 10,
   "rangeStrategy": "auto",
   "rebaseWhen": "auto",
-  "stabilityDays": 3,
+  "minimumReleaseAge": "3 days",
   "internalChecksFilter": "strict",
   "dependencyDashboard": true,
   "dependencyDashboardTitle": "📦 Renovate Dependency Dashboard",
@@ -32,7 +32,7 @@
 
   "vulnerabilityAlerts": {
     "labels": ["security", "dependencies"],
-    "stabilityDays": 0,
+    "minimumReleaseAge": null,
     "schedule": "at any time",
     "prCreation": "immediate"
   },
@@ -60,7 +60,7 @@
       "matchUpdateTypes": ["major"],
       "automerge": false,
       "labels": ["dependencies", "major", "needs-review"],
-      "stabilityDays": 7
+      "minimumReleaseAge": "7 days"
     },
     {
       "matchManagers": ["pip_requirements", "pip_setup", "pep621"],
@@ -82,7 +82,7 @@
       "matchDepNames": ["homeassistant", "home-assistant"],
       "labels": ["dependencies", "homeassistant", "needs-review"],
       "automerge": false,
-      "stabilityDays": 14,
+      "minimumReleaseAge": "14 days",
       "groupName": "homeassistant",
       "schedule": ["before 6am on the first day of the month"]
     },
@@ -91,14 +91,19 @@
       "groupName": "homeassistant test deps"
     },
     {
-      "matchPackagePatterns": ["^ruff", "^mypy"],
       "groupName": "lint & format tools",
       "automerge": true,
-      "platformAutomerge": true
+      "platformAutomerge": true,
+      "matchPackageNames": [
+        "/^ruff/",
+        "/^mypy/"
+      ]
     },
     {
-      "matchPackagePatterns": ["^pytest"],
-      "groupName": "pytest stack"
+      "groupName": "pytest stack",
+      "matchPackageNames": [
+        "/^pytest/"
+      ]
     },
     {
       "matchDatasources": ["docker"],
