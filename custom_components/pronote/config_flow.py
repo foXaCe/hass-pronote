@@ -9,6 +9,7 @@ from typing import Any
 # isort: off
 import custom_components.pronote._compat  # noqa: F401  # Patch autoslot before pronotepy
 import pronotepy  # noqa: E402
+import pronotepy.ent  # noqa: E402  # ENT classes exposed for get_ent_list
 
 # isort: on
 import voluptuous as vol
@@ -23,7 +24,6 @@ from homeassistant.helpers.selector import (
     SelectSelector,
     SelectSelectorConfig,
 )
-from pronotepy.ent import *  # noqa: F403
 
 from .api import (
     AuthenticationError,

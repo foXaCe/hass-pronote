@@ -696,6 +696,35 @@ class TestPronoteAPIClientFetchData:
 
         assert result is None
 
+    def test_get_next_day_lessons_reuses_period_no_network(self):
+        """Test _get_next_day_lessons derives next day from already-fetched period (no network calls)."""
+        client = PronoteAPIClient()
+        mock_client = MagicMock()
+        mock_client.lessons.side_effect = AssertionError("Should not call network when period is usable")
+
+        today = date(2025, 1, 15)
+        lesson_fri = SimpleNamespace(
+            id="l3",
+            subject="Science",
+            start=datetime(2025, 1, 17, 8, 0),
+            end=datetime(2025, 1, 17, 9, 0),
+            canceled=False,
+        )
+        # lessons_period est une liste d'objets Lesson déjà convertis (type modèle)
+        lesson_model_fri = client._convert_lesson(lesson_fri)
+
+        result = client._get_next_day_lessons(
+            mock_client,
+            today,
+            None,
+            max_search=30,
+            lessons_period=[lesson_model_fri],
+        )
+
+        assert result is not None
+        assert len(result) == 1
+        assert result[0].start.date() == date(2025, 1, 17)
+
 
 class TestPronoteAPIClientFetchAllData:
     """Tests for fetch_all_data method."""

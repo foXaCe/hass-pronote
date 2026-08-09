@@ -11,6 +11,7 @@ from zoneinfo import ZoneInfo
 
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ConfigEntryAuthFailed
+from homeassistant.helpers.debounce import Debouncer
 from homeassistant.helpers.update_coordinator import TimestampDataUpdateCoordinator, UpdateFailed
 
 from .api import (
@@ -69,6 +70,12 @@ class PronoteDataUpdateCoordinator(TimestampDataUpdateCoordinator):
             logger=_LOGGER,
             name=entry.title,
             update_interval=timedelta(minutes=entry.options.get("refresh_interval", DEFAULT_REFRESH_INTERVAL)),
+            request_refresh_debouncer=Debouncer(
+                hass,
+                _LOGGER,
+                cooldown=2.0,
+                immediate=False,
+            ),
         )
         self.config_entry = entry
         self._api_client = PronoteAPIClient(hass)
