@@ -121,11 +121,28 @@ class TestAsyncSetupEntry:
 
 class TestAsyncUnloadEntry:
     async def test_unload_success(self, hass: HomeAssistant):
-        """Verify async_unload_platforms is called with the correct platforms."""
+        """Verify async_unload_platforms is called and coordinator is shut down."""
         entry = MagicMock()
+        coordinator = MagicMock()
+        coordinator.async_shutdown = AsyncMock()
+        entry.runtime_data = coordinator
         hass.config_entries.async_unload_platforms = AsyncMock(return_value=True)
 
         result = await async_unload_entry(hass, entry)
 
         assert result is True
         hass.config_entries.async_unload_platforms.assert_awaited_once_with(entry, PLATFORMS)
+        coordinator.async_shutdown.assert_awaited_once()
+
+    async def test_unload_no_shutdown_on_failure(self, hass: HomeAssistant):
+        """Verify coordinator is not shut down if platform unload fails."""
+        entry = MagicMock()
+        coordinator = MagicMock()
+        coordinator.async_shutdown = AsyncMock()
+        entry.runtime_data = coordinator
+        hass.config_entries.async_unload_platforms = AsyncMock(return_value=False)
+
+        result = await async_unload_entry(hass, entry)
+
+        assert result is False
+        coordinator.async_shutdown.assert_not_awaited()

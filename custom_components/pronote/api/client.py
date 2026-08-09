@@ -282,7 +282,7 @@ class PronoteAPIClient:
         lessons_today = self._safe_get_lessons(client, today)
         lessons_tomorrow = self._safe_get_lessons(client, today + timedelta(days=1))
         lessons_period = self._get_lessons_period(client, today, lesson_max_days)
-        lessons_next_day = self._get_next_day_lessons(client, today, lessons_tomorrow, lesson_max_days)
+        lessons_next_day = self._get_next_day_lessons(client, today, lessons_tomorrow, lesson_max_days, lessons_period)
         t2 = time.perf_counter()
         _LOGGER.debug("TIMING: lessons=%.3fs", t2 - t1)
 
@@ -456,10 +456,23 @@ class PronoteAPIClient:
         today: date,
         lessons_tomorrow: list[Lesson] | None,
         max_search: int = 30,
+        lessons_period: list[Lesson] | None = None,
     ) -> list[Lesson] | None:
         """Détermine les cours du prochain jour scolaire."""
         if lessons_tomorrow and len(lessons_tomorrow) > 0:
             return lessons_tomorrow
+
+        # Réutiliser la période déjà chargée (15 jours) pour éviter des appels réseau
+        if lessons_period:
+            lessons_period_sorted = sorted(lessons_period, key=lambda x: x.start)
+            today_start = datetime.combine(today, datetime.min.time())
+            for lesson in lessons_period_sorted:
+                if lesson.start > today_start and not lesson.canceled:
+                    return [
+                        item
+                        for item in lessons_period_sorted
+                        if item.start.date() == lesson.start.date() and not item.canceled
+                    ]
 
         delta = 2
         while delta < max_search:
