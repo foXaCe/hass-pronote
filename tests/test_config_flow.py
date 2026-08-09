@@ -245,6 +245,8 @@ async def test_reauth_up_success(hass: HomeAssistant) -> None:
     assert result["reason"] == "reauth_successful"
     assert entry.data["password"] == "new_password"
 
+    await hass.async_block_till_done()
+
 
 async def test_reauth_up_invalid_auth(hass: HomeAssistant) -> None:
     """Failed UP reauth shows error."""
@@ -311,6 +313,8 @@ async def test_reauth_qr_success(hass: HomeAssistant) -> None:
     assert result["type"] is FlowResultType.ABORT
     assert result["reason"] == "reauth_successful"
     assert entry.data["qr_code_password"] == "qr_pass"
+
+    await hass.async_block_till_done()
 
 
 # Additional tests for coverage
