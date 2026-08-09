@@ -1,10 +1,25 @@
 # Pronote integration for Home Assistant
 
+[![GitHub Release][releases-shield]][releases]
+[![License][license-shield]](LICENSE)
+[![hacs][hacsbadge]][hacs]
+[![CI][ci-shield]][ci]
+[![Project Maintenance][maintainer-shield]][maintainer]
+
+_Custom Home Assistant integration for Pronote (gestion de vie scolaire)._
+
+## Features
+
+- Connexion par identifiants ou QR code
+- Capteurs : emploi du temps, notes, devoirs, absences, évaluations, moyennes, punitions, retards, menus
+- Mise à jour automatique toutes les 15 minutes
+- Diagnostics et repairs intégrés
+
 ## Installation
 
 ### Using HACS
 
-[![Open your Home Assistant instance and open a repository inside the Home Assistant Community Store.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=delphiki&repository=hass-pronote&category=integration)
+[![Open your Home Assistant instance and open a repository inside the Home Assistant Community Store.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=foXaCe&repository=hass-pronote&category=integration)
 
 OR
 
@@ -93,3 +108,23 @@ To fully uninstall, also remove the `pronote` folder from `custom_components` an
 ## Cards
 
 Cards are available here: https://github.com/delphiki/lovelace-pronote
+
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md).
+
+## License
+
+[MIT](LICENSE)
+
+<!-- Badges links -->
+[releases-shield]: https://img.shields.io/github/release/foXaCe/hass-pronote.svg?style=for-the-badge
+[releases]: https://github.com/foXaCe/hass-pronote/releases
+[license-shield]: https://img.shields.io/github/license/foXaCe/hass-pronote.svg?style=for-the-badge
+[hacs]: https://github.com/hacs/integration
+[hacsbadge]: https://img.shields.io/badge/HACS-Custom-orange.svg?style=for-the-badge
+[ci-shield]: https://img.shields.io/github/actions/workflow/status/foXaCe/hass-pronote/ci.yml?branch=main&style=for-the-badge
+[ci]: https://github.com/foXaCe/hass-pronote/actions/workflows/ci.yml
+[maintenance-shield]: https://img.shields.io/maintenance/yes/2026.svg?style=for-the-badge
+[maintainer-shield]: https://img.shields.io/badge/maintainer-%40foXaCe-blue.svg?style=for-the-badge
+[maintainer]: https://github.com/foXaCe

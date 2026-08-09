@@ -1,18 +1,23 @@
-## Description
+## Proposed change
 
-<!-- Décrivez les changements apportés -->
+<!-- Décrire le changement -->
 
-## Type de changement
+## Type of change
 
-- [ ] Bug fix
-- [ ] Nouvelle fonctionnalité
-- [ ] Refactoring
-- [ ] Documentation
-- [ ] CI/CD
+- [ ] Dependency upgrade
+- [ ] Bugfix (non-breaking change which fixes an issue)
+- [ ] New feature (non-breaking change which adds functionality)
+- [ ] Breaking change (fix/feature causing existing functionality to break)
+- [ ] Code quality / refactor
+- [ ] Documentation update
 
 ## Checklist
 
-- [ ] Mon code suit le style du projet
-- [ ] J'ai testé mes changements localement
-- [ ] J'ai mis à jour la documentation si nécessaire
-- [ ] Les tests passent
+- [ ] The code change is tested and works locally on Home Assistant
+- [ ] Tests have been added/updated where applicable
+- [ ] `pytest` passes with coverage ≥ 40 %
+- [ ] `ruff check .` and `ruff format --check .` pass
+- [ ] `hassfest` validation passes
+- [ ] HACS validation passes
+- [ ] strings.json + translations/fr.json updated (vouvoiement)
+- [ ] CHANGELOG.md updated under `[Unreleased]`

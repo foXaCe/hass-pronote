@@ -13,7 +13,11 @@ env/
 
 # IDE
 .idea/
-.vscode/
+.vscode/*
+!.vscode/settings.json
+!.vscode/extensions.json
+!.vscode/launch.json
+!.vscode/tasks.json
 *.swp
 *.swo
 
@@ -24,8 +28,22 @@ env/
 # Testing
 .pytest_cache/
 .coverage
+.coverage.*
+coverage.xml
 htmlcov/
+.mypy_cache/
+.ruff_cache/
+
+# HA dev
+config/
+home-assistant_v2.db*
+home-assistant.log
+.storage/
 
 # OS
 .DS_Store
 Thumbs.db
+
+# Local
+*.local
+actionlint

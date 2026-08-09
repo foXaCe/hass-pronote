@@ -1,0 +1,107 @@
+name: Security audit
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  schedule:
+    - cron: "0 6 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  security-events: write
+  pull-requests: write
+
+concurrency:
+  group: security-audit-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  python-audit:
+    name: Security audit
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+        if: ${{ hashFiles('custom_components/**/manifest.json', 'requirements*.txt', 'pyproject.toml') != '' }}
+      - uses: actions/setup-python@v7
+        if: ${{ hashFiles('custom_components/**/manifest.json', 'requirements*.txt', 'pyproject.toml') != '' }}
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install pip-audit
+        if: ${{ hashFiles('custom_components/**/manifest.json', 'requirements*.txt', 'pyproject.toml') != '' }}
+        run: pipx install pip-audit
+
+      - name: Audit manifest.json (HA integration requirements)
+        run: |
+          for m in $(find custom_components -name manifest.json); do
+            jq -r '.requirements[]' "$m" > /tmp/m_reqs.txt 2>/dev/null || true
+            [ -s /tmp/m_reqs.txt ] && pip-audit --requirement /tmp/m_reqs.txt --strict || true
+          done
+
+      - name: Audit requirements_dev / test
+        run: |
+          for r in requirements_dev.txt requirements_test.txt requirements.txt; do
+            [ -f "$r" ] && pip-audit --requirement "$r" --strict
+          done
+
+  osv-scanner:
+    name: OSV-Scanner
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - uses: google/osv-scanner-action/osv-scanner-action@v2
+        with:
+          scan-args: |
+            --recursive
+            --skip-git
+            ./
+        continue-on-error: false
+
+  secret-scan:
+    name: Gitleaks
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  lockfile-freshness:
+    name: Lockfile age check
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - uses: actions/checkout@v7
+      - name: Check lockfile age
+        run: |
+          for lock in package-lock.json yarn.lock pnpm-lock.yaml poetry.lock Pipfile.lock Cargo.lock; do
+            [ -f "$lock" ] || continue
+            AGE=$(( ($(date +%s) - $(git log -1 --format=%ct -- "$lock")) / 86400 ))
+            if [ $AGE -gt 90 ]; then
+              echo "::error file=$lock::$lock non régénéré depuis $AGE jours → CVE probables, lancer le manager (npm install / poetry update / etc.)"
+              exit 1
+            elif [ $AGE -gt 60 ]; then
+              echo "::warning file=$lock::$lock vieillit ($AGE jours)"
+            fi
+          done
+
+  dependency-review:
+    name: Dependency review
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    if: ${{ github.event_name == 'pull_request' }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/dependency-review-action@v5
+        with:
+          fail-on-severity: high
+          comment-summary-in-pr: on-failure

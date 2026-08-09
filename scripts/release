@@ -1,0 +1,7 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Release via release-please : merge la Release PR (conventional commits sur main)
+# → bump SemVer auto, tag + release publiés, zip + sha256 uploadés.
+echo "La release est gérée par .github/workflows/release.yml (release-please)."
+echo "Mergez la Release PR ouverte par release-please sur main pour publier."

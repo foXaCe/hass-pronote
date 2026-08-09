@@ -1,0 +1,7 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+pip install -r requirements_dev.txt
+command -v prek >/dev/null 2>&1 || pipx install prek
+prek install
+echo "Setup complete. Next : scripts/develop"

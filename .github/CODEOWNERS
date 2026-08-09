@@ -1,1 +1,11 @@
-* @delphiki
+# Default owner for everything in the repo
+* @foXaCe
+
+# Workflows
+/.github/ @foXaCe
+
+# Integration code
+/custom_components/pronote/ @foXaCe
+
+# Translations
+/custom_components/pronote/translations/ @foXaCe

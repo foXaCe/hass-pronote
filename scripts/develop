@@ -1,0 +1,5 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Lance Home Assistant en mode debug avec l'intégration montée
+python -m homeassistant --debug -c config

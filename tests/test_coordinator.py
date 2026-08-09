@@ -599,14 +599,16 @@ class TestCoordinatorAdditionalCoverage:
             if "data" in kwargs:
                 entry.data = kwargs["data"]
 
-        with patch("custom_components.pronote.coordinator.async_delete_issue_for_entry"):
-            with patch.object(
+        with (
+            patch("custom_components.pronote.coordinator.async_delete_issue_for_entry"),
+            patch.object(
                 mock_coordinator.hass.config_entries,
                 "async_update_entry",
                 side_effect=update_entry_side_effect,
-            ) as mock_update:
-                with patch.object(mock_coordinator, "_compare_and_fire_events"):
-                    result = await mock_coordinator._async_update_data()
+            ) as mock_update,
+            patch.object(mock_coordinator, "_compare_and_fire_events"),
+        ):
+            result = await mock_coordinator._async_update_data()
 
         assert result is not None
         # Called once by _save_credentials_if_needed (no drift since live password matches)
@@ -684,14 +686,16 @@ class TestCoordinatorAdditionalCoverage:
             if "data" in kwargs:
                 entry.data = kwargs["data"]
 
-        with patch("custom_components.pronote.coordinator.async_delete_issue_for_entry"):
-            with patch.object(
+        with (
+            patch("custom_components.pronote.coordinator.async_delete_issue_for_entry"),
+            patch.object(
                 mock_coordinator.hass.config_entries,
                 "async_update_entry",
                 side_effect=update_entry_side_effect,
-            ) as mock_update:
-                with patch.object(mock_coordinator, "_compare_and_fire_events"):
-                    await mock_coordinator._async_update_data()
+            ) as mock_update,
+            patch.object(mock_coordinator, "_compare_and_fire_events"),
+        ):
+            await mock_coordinator._async_update_data()
 
         # Drift detected → credentials persisted
         mock_update.assert_called()
