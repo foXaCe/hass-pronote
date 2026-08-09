@@ -3,7 +3,7 @@
 ## Via HACS (recommandé)
 
 1. Ouvrez HACS dans Home Assistant
-2. Ajoutez ce dépôt comme dépôt personnalisé (type : Integration)
+2. Ajoutez ce dépôt comme dépôt personnalisé : `https://github.com/foXaCe/hass-pronote` (type : Integration)
 3. Cherchez « Pronote » et installez
 4. Redémarrez Home Assistant
 5. Paramètres → Appareils & Services → Ajouter une intégration → « Pronote »

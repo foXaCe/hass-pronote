@@ -35,7 +35,7 @@ body:
     id: version
     attributes:
       label: Version de l'intégration
-      placeholder: "ex: 0.15.5"
+      placeholder: "ex: 1.1.11"
     validations:
       required: true
   - type: input
@@ -49,7 +49,7 @@ body:
     id: logs
     attributes:
       label: Logs
-      description: Logs pertinents (Home Assistant -> Paramètres -> Système -> Journaux).
+      description: Logs pertinents (Home Assistant -> Paramètres -> Système -> Journaux). ⚠ Supprimez toute donnée sensible (identifiants, jetons, données personnelles, URL privée de l'établissement) avant publication.
       render: text
   - type: textarea
     id: additional

@@ -6,7 +6,7 @@ Oui, cette intégration est open source (MIT).
 
 ## À quelle fréquence les données sont-elles mises à jour ?
 
-Toutes les 15 minutes.
+Par défaut toutes les 15 minutes (intervalle configurable).
 
 ## Puis-je suivre plusieurs enfants ?
 

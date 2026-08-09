@@ -4,6 +4,7 @@
 [![License][license-shield]](LICENSE)
 [![hacs][hacsbadge]][hacs]
 [![CI][ci-shield]][ci]
+[![Maintenance][maintenance-shield]][maintenance]
 [![Project Maintenance][maintainer-shield]][maintainer]
 
 _Custom Home Assistant integration for Pronote (gestion de vie scolaire)._
@@ -12,7 +13,7 @@ _Custom Home Assistant integration for Pronote (gestion de vie scolaire)._
 
 - Connexion par identifiants ou QR code
 - Capteurs : emploi du temps, notes, devoirs, absences, évaluations, moyennes, punitions, retards, menus
-- Mise à jour automatique toutes les 15 minutes
+- Mise à jour automatique toutes les 15 minutes (par défaut)
 - Diagnostics et repairs intégrés
 
 ## Installation
@@ -126,5 +127,6 @@ See [CONTRIBUTING.md](CONTRIBUTING.md).
 [ci-shield]: https://img.shields.io/github/actions/workflow/status/foXaCe/hass-pronote/ci.yml?branch=main&style=for-the-badge
 [ci]: https://github.com/foXaCe/hass-pronote/actions/workflows/ci.yml
 [maintenance-shield]: https://img.shields.io/maintenance/yes/2026.svg?style=for-the-badge
+[maintenance]: #
 [maintainer-shield]: https://img.shields.io/badge/maintainer-%40foXaCe-blue.svg?style=for-the-badge
 [maintainer]: https://github.com/foXaCe

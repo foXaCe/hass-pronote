@@ -6,7 +6,7 @@ _Custom Home Assistant integration for Pronote (gestion de vie scolaire)._
 
 - Connexion par identifiants ou QR code
 - Capteurs : emploi du temps, notes, devoirs, absences, évaluations, moyennes, punitions, retards, menus
-- Mise à jour automatique toutes les 15 minutes
+- Mise à jour automatique toutes les 15 minutes (par défaut)
 - Diagnostics et repairs intégrés
 
 ## Configuration

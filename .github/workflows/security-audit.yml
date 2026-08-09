@@ -25,6 +25,8 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
       - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
@@ -52,6 +54,8 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
       - name: Generate runtime requirements from manifest
         run: |
           jq -r '.requirements[]' custom_components/pronote/manifest.json > requirements-runtime.txt
@@ -82,6 +86,8 @@ jobs:
     timeout-minutes: 2
     steps:
       - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
       - name: Check lockfile age
         run: |
           for lock in package-lock.json yarn.lock pnpm-lock.yaml poetry.lock Pipfile.lock Cargo.lock; do
@@ -102,6 +108,8 @@ jobs:
     if: ${{ github.event_name == 'pull_request' }}
     steps:
       - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
       - uses: actions/dependency-review-action@v5
         with:
           fail-on-severity: high

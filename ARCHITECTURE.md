@@ -6,7 +6,7 @@ calendrier) à partir du client API pronotepy.
 
 ## Flux
 
-```
+```text
 ConfigFlow (identifiants / QR code)
    │
    ▼

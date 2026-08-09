@@ -21,4 +21,4 @@ les active côté Pronote.
 Ouvrez une [issue](https://github.com/foXaCe/hass-pronote/issues) avec :
 - Version de l'intégration et de Home Assistant
 - Étapes de reproduction
-- Logs pertinents
+- Logs pertinents (⚠ supprimez toute donnée sensible : identifiants, jetons, données personnelles, URL privée de l'établissement)
