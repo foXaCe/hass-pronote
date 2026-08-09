@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.12](https://github.com/foXaCe/hass-pronote/compare/v1.1.11...v1.1.12) (2026-08-09)
+
+
+### Performance Improvements
+
+* optimize boot — debouncer, coordinator shutdown, reduce network calls, lazy pronotepy.ent ([b9d9769](https://github.com/foXaCe/hass-pronote/commit/b9d97694dabde410738f34e8f5cd8d7a4d6ab56d))
+* optimize boot (debouncer, coordinator shutdown, fewer network calls) ([#23](https://github.com/foXaCe/hass-pronote/issues/23)) ([b9d9769](https://github.com/foXaCe/hass-pronote/commit/b9d97694dabde410738f34e8f5cd8d7a4d6ab56d))
+
 ## [Unreleased]
 
 ## [1.1.11] - 2026-04-01
