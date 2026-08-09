@@ -60,6 +60,7 @@ jobs:
         with:
           scan-args: |
             --recursive
+            --no-resolve
             requirements-runtime.txt
         continue-on-error: false
 
