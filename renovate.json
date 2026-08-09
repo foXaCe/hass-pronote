@@ -11,7 +11,7 @@
     ":enableVulnerabilityAlertsWithLabel('security')",
     ":maintainLockFilesWeekly",
     ":timezone(Europe/Paris)",
-    ":automergeBranch",
+    ":automergePr",
     ":separatePatchReleases",
     "schedule:nonOfficeHours"
   ],

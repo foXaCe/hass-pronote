@@ -2,7 +2,7 @@
 
 ## Supported versions
 
-Seules les versions sur la branche `main` sont supportées.
+Les releases publiées (HACS) et la branche `main` sont supportées.
 
 ## Reporting a vulnerability
 

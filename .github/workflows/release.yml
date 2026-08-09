@@ -27,23 +27,7 @@ jobs:
       - uses: googleapis/release-please-action@v5
         id: release
         with:
-          release-type: simple
-          package-name: pronote
-          extra-files: |
-            custom_components/pronote/manifest.json
-          changelog-types: |
-            [
-              {"type":"feat","section":"Added","hidden":false},
-              {"type":"fix","section":"Fixed","hidden":false},
-              {"type":"perf","section":"Changed","hidden":false},
-              {"type":"refactor","section":"Changed","hidden":false},
-              {"type":"docs","section":"Documentation","hidden":false},
-              {"type":"test","section":"Tests","hidden":true},
-              {"type":"build","section":"Build","hidden":true},
-              {"type":"ci","section":"CI","hidden":true},
-              {"type":"chore","section":"Miscellaneous","hidden":true},
-              {"type":"revert","section":"Reverted","hidden":false}
-            ]
+          token: ${{ secrets.GITHUB_TOKEN }}
 
   publish-assets:
     name: Build + upload zip

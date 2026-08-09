@@ -11,8 +11,6 @@ on:
 
 permissions:
   contents: read
-  security-events: write
-  pull-requests: write
 
 concurrency:
   group: security-audit-${{ github.ref }}
@@ -38,8 +36,10 @@ jobs:
       - name: Audit manifest.json (HA integration requirements)
         run: |
           for m in $(find custom_components -name manifest.json); do
-            jq -r '.requirements[]' "$m" > /tmp/m_reqs.txt 2>/dev/null || true
-            [ -s /tmp/m_reqs.txt ] && pip-audit --requirement /tmp/m_reqs.txt --strict || true
+            if jq -e '.requirements' "$m" >/dev/null 2>&1; then
+              jq -r '.requirements[]' "$m" > /tmp/m_reqs.txt
+              [ -s /tmp/m_reqs.txt ] && pip-audit --requirement /tmp/m_reqs.txt --strict
+            fi
           done
 
       - name: Audit requirements_dev / test
@@ -106,6 +106,9 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     if: ${{ github.event_name == 'pull_request' }}
+    permissions:
+      contents: read
+      pull-requests: write
     steps:
       - uses: actions/checkout@v7
         with:
