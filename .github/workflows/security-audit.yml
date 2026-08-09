@@ -25,15 +25,12 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v7
-        if: ${{ hashFiles('custom_components/**/manifest.json', 'requirements*.txt', 'pyproject.toml') != '' }}
       - uses: actions/setup-python@v7
-        if: ${{ hashFiles('custom_components/**/manifest.json', 'requirements*.txt', 'pyproject.toml') != '' }}
         with:
           python-version: "3.12"
           cache: pip
 
       - name: Install pip-audit
-        if: ${{ hashFiles('custom_components/**/manifest.json', 'requirements*.txt', 'pyproject.toml') != '' }}
         run: pipx install pip-audit
 
       - name: Audit manifest.json (HA integration requirements)
@@ -55,7 +52,7 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v7
-      - uses: google/osv-scanner-action/osv-scanner-action@v2
+      - uses: google/osv-scanner-action/osv-scanner-action@v2.5.0
         with:
           scan-args: |
             --recursive
