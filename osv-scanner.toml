@@ -1,0 +1,9 @@
+# OSV-Scanner config
+# homeassistant est épinglé comme framework de test par
+# pytest-homeassistant-custom-component (requirements_test.txt). Il n'est PAS
+# un runtime distribué par cette intégration : le runtime réel (pronotepy,
+# python-slugify) est audité strictement par pip-audit (manifest.json).
+[[PackageOverrides]]
+name = "homeassistant"
+vulnerability.ignore = true
+reason = "Framework de test HA épinglé par pytest-homeassistant-custom-component, pas un runtime distribué"
