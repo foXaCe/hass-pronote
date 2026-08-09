@@ -9,10 +9,13 @@
   "integration_type": "service",
   "iot_class": "cloud_polling",
   "issue_tracker": "https://github.com/foXaCe/hass-pronote/issues",
-  "loggers": ["custom_components.pronote", "pronotepy"],
+  "loggers": [
+    "custom_components.pronote",
+    "pronotepy"
+  ],
   "requirements": [
     "pronotepy==2.14.6",
     "python-slugify==8.0.4"
   ],
-  "version": "1.1.11"
+  "version": "1.1.12"
 }
