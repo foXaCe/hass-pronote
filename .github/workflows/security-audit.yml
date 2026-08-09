@@ -52,12 +52,15 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v7
+      - name: Generate runtime requirements from manifest
+        run: |
+          jq -r '.requirements[]' custom_components/pronote/manifest.json > requirements-runtime.txt
+          cat requirements-runtime.txt
       - uses: google/osv-scanner-action/osv-scanner-action@v2.5.0
         with:
           scan-args: |
             --recursive
-            --config=/github/workspace/osv-scanner.toml
-            ./
+            requirements-runtime.txt
         continue-on-error: false
 
   secret-scan:
