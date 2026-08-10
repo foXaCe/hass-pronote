@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.13](https://github.com/foXaCe/hass-pronote/compare/v1.1.12...v1.1.13) (2026-08-10)
+
+
+### Performance Improvements
+
+* lazy import repairs in coordinator (module load -46%) ([#26](https://github.com/foXaCe/hass-pronote/issues/26)) ([f6a1d3d](https://github.com/foXaCe/hass-pronote/commit/f6a1d3d6d32eda11dbe9acf8024c1f7dee7ef1bb))
+* lazy import repairs in coordinator to speed up module load (-46%) ([f6a1d3d](https://github.com/foXaCe/hass-pronote/commit/f6a1d3d6d32eda11dbe9acf8024c1f7dee7ef1bb))
+
 ## [1.1.12](https://github.com/foXaCe/hass-pronote/compare/v1.1.11...v1.1.12) (2026-08-09)
 
 
