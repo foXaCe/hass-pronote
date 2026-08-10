@@ -8,8 +8,6 @@ from typing import Any
 
 # isort: off
 import custom_components.pronote._compat  # noqa: F401  # Patch autoslot before pronotepy
-import pronotepy  # noqa: E402
-import pronotepy.ent  # noqa: E402  # ENT classes exposed for get_ent_list
 
 # isort: on
 import voluptuous as vol
@@ -25,10 +23,6 @@ from homeassistant.helpers.selector import (
     SelectSelectorConfig,
 )
 
-from .api import (
-    AuthenticationError,
-    PronoteAPIClient,
-)
 from .const import (
     DEFAULT_ALARM_OFFSET,
     DEFAULT_GRADES_TO_DISPLAY,
@@ -41,7 +35,23 @@ from .const import (
 _LOGGER = logging.getLogger(__name__)
 
 
+def _get_api_client():
+    """Import PronoteAPIClient lazily to avoid loading pronotepy at config_flow import."""
+    from .api import PronoteAPIClient  # noqa: PLC0415
+
+    return PronoteAPIClient()
+
+
+def _get_auth_error():
+    """Import AuthenticationError lazily."""
+    from .api import AuthenticationError  # noqa: PLC0415
+
+    return AuthenticationError
+
+
 def get_ent_list() -> list[str]:
+    import pronotepy.ent  # noqa: PLC0415  # lazy: avoids loading pronotepy at config_flow import
+
     ent_functions = dir(pronotepy.ent)
     ent = []
     for func in ent_functions:
@@ -58,15 +68,19 @@ ACCOUNT_TYPE_SELECTOR = SelectSelector(
     )
 )
 
-STEP_USER_DATA_SCHEMA_UP = vol.Schema(
-    {
-        vol.Required("account_type"): ACCOUNT_TYPE_SELECTOR,
-        vol.Required("url"): str,
-        vol.Required("username"): str,
-        vol.Required("password"): str,
-        vol.Optional("ent"): vol.In(get_ent_list()),
-    }
-)
+
+def _step_user_schema_up() -> vol.Schema:
+    """Build the username/password schema lazily (pronotepy.ent is heavy)."""
+    return vol.Schema(
+        {
+            vol.Required("account_type"): ACCOUNT_TYPE_SELECTOR,
+            vol.Required("url"): str,
+            vol.Required("username"): str,
+            vol.Required("password"): str,
+            vol.Optional("ent"): vol.In(get_ent_list()),
+        }
+    )
+
 
 STEP_USER_DATA_SCHEMA_QR = vol.Schema(
     {
@@ -85,7 +99,7 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
     def __init__(self) -> None:
         self._user_inputs: dict = {}
-        self._api_client = PronoteAPIClient()
+        self._api_client = _get_api_client()
 
     async def async_step_user(self, user_input: dict | None = None) -> FlowResult:
         """Handle a flow initialized by the user."""
@@ -112,7 +126,7 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
                 if client is None:
                     raise InvalidAuth
-            except AuthenticationError:
+            except _get_auth_error():
                 errors["base"] = "invalid_auth"
             except InvalidAuth:
                 errors["base"] = "invalid_auth"
@@ -129,7 +143,7 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
         return self.async_show_form(
             step_id="username_password_login",
-            data_schema=STEP_USER_DATA_SCHEMA_UP,
+            data_schema=_step_user_schema_up(),
             errors=errors,
         )
 
@@ -151,7 +165,7 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
                 if client is None:
                     raise InvalidAuth
-            except AuthenticationError as err:
+            except _get_auth_error() as err:
                 _LOGGER.error("AuthenticationError during QR auth: %s", err)
                 errors["base"] = "invalid_auth"
             except InvalidAuth:
@@ -246,7 +260,7 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         """Handle reauth when credentials expire."""
         self._user_inputs = dict(entry_data)
         # Reset API client for fresh auth
-        self._api_client = PronoteAPIClient()
+        self._api_client = _get_api_client()
         return await self.async_step_reauth_confirm()
 
     async def async_step_reauth_confirm(self, user_input: dict | None = None) -> FlowResult:
@@ -266,7 +280,7 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     creds = self._api_client._credentials
                     if client is None:
                         raise InvalidAuth
-                except (AuthenticationError, InvalidAuth):
+                except (_get_auth_error(), InvalidAuth):
                     errors["base"] = "invalid_auth"
                 except Exception:
                     _LOGGER.exception("Unexpected error during QR reauth")
@@ -288,7 +302,7 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     client = self._api_client._client
                     if client is None:
                         raise InvalidAuth
-                except (AuthenticationError, InvalidAuth):
+                except (_get_auth_error(), InvalidAuth):
                     errors["base"] = "invalid_auth"
                 except Exception:
                     _LOGGER.exception("Unexpected error during password reauth")

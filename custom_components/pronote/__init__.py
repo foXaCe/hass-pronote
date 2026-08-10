@@ -11,7 +11,6 @@ from homeassistant.core import HomeAssistant
 import custom_components.pronote._compat  # noqa: F401  # Apply autoslot hotfix before pronotepy
 
 from .const import DEFAULT_REFRESH_INTERVAL, PLATFORMS, PronoteConfigEntry
-from .coordinator import PronoteDataUpdateCoordinator
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -34,6 +33,8 @@ async def async_migrate_entry(hass, config_entry) -> bool:
 
 async def async_setup_entry(hass: HomeAssistant, entry: PronoteConfigEntry) -> bool:
     """Set up Pronote from a config entry."""
+    from .coordinator import PronoteDataUpdateCoordinator  # noqa: PLC0415  # lazy: heavy imports (pronotepy)
+
     t0 = time.perf_counter()
     coordinator = PronoteDataUpdateCoordinator(hass, entry)
 
