@@ -115,7 +115,7 @@ class TestPronoteDataUpdateCoordinator:
         mock_coordinator._api_client.is_authenticated.return_value = True
         mock_coordinator._api_client.fetch_all_data.return_value = mock_pronote_data
 
-        with patch("custom_components.pronote.coordinator.async_delete_issue_for_entry"):
+        with patch("custom_components.pronote.repairs.async_delete_issue_for_entry"):
             with patch.object(mock_coordinator, "_compare_and_fire_events"):
                 result = await mock_coordinator._async_update_data()
 
@@ -134,7 +134,7 @@ class TestPronoteDataUpdateCoordinator:
         mock_coordinator._api_client.is_authenticated.return_value = False
         mock_coordinator._api_client.authenticate.side_effect = AuthenticationError("Invalid credentials")
 
-        with patch("custom_components.pronote.coordinator.async_create_session_expired_issue") as mock_create:
+        with patch("custom_components.pronote.repairs.async_create_session_expired_issue") as mock_create:
             with pytest.raises(ConfigEntryAuthFailed, match="Authentication failed"):
                 await mock_coordinator._async_update_data()
 
@@ -148,7 +148,7 @@ class TestPronoteDataUpdateCoordinator:
         mock_coordinator._api_client.is_authenticated.return_value = False
         mock_coordinator._api_client.authenticate.side_effect = RateLimitError("Rate limited", retry_after=60)
 
-        with patch("custom_components.pronote.coordinator.async_create_rate_limited_issue") as mock_create:
+        with patch("custom_components.pronote.repairs.async_create_rate_limited_issue") as mock_create:
             with pytest.raises(UpdateFailed, match="Rate limited"):
                 await mock_coordinator._async_update_data()
 
@@ -173,7 +173,7 @@ class TestPronoteDataUpdateCoordinator:
         mock_coordinator._api_client.is_authenticated.return_value = False
         mock_coordinator._api_client.authenticate.side_effect = ConnectionError("Network error")
 
-        with patch("custom_components.pronote.coordinator.async_create_connection_error_issue") as mock_create:
+        with patch("custom_components.pronote.repairs.async_create_connection_error_issue") as mock_create:
             with pytest.raises(UpdateFailed, match="Connection error"):
                 await mock_coordinator._async_update_data()
 
@@ -184,8 +184,8 @@ class TestPronoteDataUpdateCoordinator:
         """Test when client is not authenticated after auth attempt."""
         mock_coordinator._api_client.is_authenticated.return_value = False
 
-        with patch("custom_components.pronote.coordinator.async_create_session_expired_issue") as mock_create:
-            with patch("custom_components.pronote.coordinator.async_delete_issue_for_entry"):
+        with patch("custom_components.pronote.repairs.async_create_session_expired_issue") as mock_create:
+            with patch("custom_components.pronote.repairs.async_delete_issue_for_entry"):
                 with pytest.raises(ConfigEntryAuthFailed, match="Unable to authenticate"):
                     await mock_coordinator._async_update_data()
 
@@ -199,8 +199,8 @@ class TestPronoteDataUpdateCoordinator:
         mock_coordinator._api_client.is_authenticated.return_value = True
         mock_coordinator._api_client.fetch_all_data.side_effect = RateLimitError("Rate limited", retry_after=120)
 
-        with patch("custom_components.pronote.coordinator.async_create_rate_limited_issue") as mock_create:
-            with patch("custom_components.pronote.coordinator.async_delete_issue_for_entry"):
+        with patch("custom_components.pronote.repairs.async_create_rate_limited_issue") as mock_create:
+            with patch("custom_components.pronote.repairs.async_delete_issue_for_entry"):
                 with pytest.raises(UpdateFailed, match="Rate limited"):
                     await mock_coordinator._async_update_data()
 
@@ -215,7 +215,7 @@ class TestPronoteDataUpdateCoordinator:
         mock_coordinator._api_client.is_authenticated.return_value = True
         mock_coordinator._api_client.fetch_all_data.return_value = mock_pronote_data
 
-        with patch("custom_components.pronote.coordinator.async_delete_issue_for_entry"):
+        with patch("custom_components.pronote.repairs.async_delete_issue_for_entry"):
             with pytest.raises(UpdateFailed, match="No child info available"):
                 await mock_coordinator._async_update_data()
 
@@ -499,7 +499,7 @@ class TestCoordinatorAdditionalCoverage:
         mock_coordinator._api_client.is_authenticated.return_value = True
         mock_coordinator._api_client.fetch_all_data.side_effect = InvalidResponseError("Invalid response")
 
-        with patch("custom_components.pronote.coordinator.async_delete_issue_for_entry"):
+        with patch("custom_components.pronote.repairs.async_delete_issue_for_entry"):
             with pytest.raises(UpdateFailed, match="Invalid response"):
                 await mock_coordinator._async_update_data()
 
@@ -511,8 +511,8 @@ class TestCoordinatorAdditionalCoverage:
         mock_coordinator._api_client.is_authenticated.return_value = True
         mock_coordinator._api_client.fetch_all_data.side_effect = ConnectionError("Network error")
 
-        with patch("custom_components.pronote.coordinator.async_create_connection_error_issue") as mock_create:
-            with patch("custom_components.pronote.coordinator.async_delete_issue_for_entry"):
+        with patch("custom_components.pronote.repairs.async_create_connection_error_issue") as mock_create:
+            with patch("custom_components.pronote.repairs.async_delete_issue_for_entry"):
                 with pytest.raises(UpdateFailed, match="Connection error"):
                     await mock_coordinator._async_update_data()
 
@@ -524,7 +524,7 @@ class TestCoordinatorAdditionalCoverage:
         mock_coordinator._api_client.is_authenticated.return_value = True
         mock_coordinator._api_client.fetch_all_data.side_effect = RuntimeError("Unknown error")
 
-        with patch("custom_components.pronote.coordinator.async_delete_issue_for_entry"):
+        with patch("custom_components.pronote.repairs.async_delete_issue_for_entry"):
             with pytest.raises(UpdateFailed, match="Error fetching data"):
                 await mock_coordinator._async_update_data()
 
@@ -536,7 +536,7 @@ class TestCoordinatorAdditionalCoverage:
         mock_coordinator._api_client.is_authenticated.return_value = True
         mock_coordinator._api_client.fetch_all_data.side_effect = AuthenticationError("Session expired")
 
-        with patch("custom_components.pronote.coordinator.async_delete_issue_for_entry"):
+        with patch("custom_components.pronote.repairs.async_delete_issue_for_entry"):
             with pytest.raises(UpdateFailed, match="Session expired"):
                 await mock_coordinator._async_update_data()
 
@@ -600,7 +600,7 @@ class TestCoordinatorAdditionalCoverage:
                 entry.data = kwargs["data"]
 
         with (
-            patch("custom_components.pronote.coordinator.async_delete_issue_for_entry"),
+            patch("custom_components.pronote.repairs.async_delete_issue_for_entry"),
             patch.object(
                 mock_coordinator.hass.config_entries,
                 "async_update_entry",
@@ -687,7 +687,7 @@ class TestCoordinatorAdditionalCoverage:
                 entry.data = kwargs["data"]
 
         with (
-            patch("custom_components.pronote.coordinator.async_delete_issue_for_entry"),
+            patch("custom_components.pronote.repairs.async_delete_issue_for_entry"),
             patch.object(
                 mock_coordinator.hass.config_entries,
                 "async_update_entry",
@@ -749,7 +749,7 @@ class TestCoordinatorAdditionalCoverage:
             "qr_code_uuid": "uuid123",
         }
 
-        with patch("custom_components.pronote.coordinator.async_delete_issue_for_entry"):
+        with patch("custom_components.pronote.repairs.async_delete_issue_for_entry"):
             with patch.object(mock_coordinator.hass.config_entries, "async_update_entry") as mock_update:
                 with patch.object(mock_coordinator, "_compare_and_fire_events"):
                     await mock_coordinator._async_update_data()
@@ -793,7 +793,7 @@ class TestCoordinatorAdditionalCoverage:
         mock_coordinator._api_client.is_authenticated.return_value = True
         mock_coordinator._api_client.fetch_all_data.return_value = mock_pronote_data
 
-        with patch("custom_components.pronote.coordinator.async_delete_issue_for_entry"):
+        with patch("custom_components.pronote.repairs.async_delete_issue_for_entry"):
             with patch.object(mock_coordinator, "_compare_and_fire_events"):
                 result = await mock_coordinator._async_update_data()
 

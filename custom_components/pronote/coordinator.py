@@ -34,14 +34,30 @@ from .const import (
     PronoteConfigEntry,
 )
 from .pronote_formatter import format_absence, format_delay, format_evaluation, format_grade
-from .repairs import (
-    async_create_connection_error_issue,
-    async_create_rate_limited_issue,
-    async_create_session_expired_issue,
-    async_delete_issue_for_entry,
-)
 
 _LOGGER = logging.getLogger(__name__)
+
+
+def _get_repairs():
+    """Import repairs lazily to avoid loading homeassistant.components.repairs at boot.
+
+    repairs is only needed when errors occur, not during normal coordinator
+    setup or refresh. Loading it eagerly pulls in the heavy repairs platform
+    (http, websocket_api) which adds hundreds of ms to module import.
+    """
+    from .repairs import (  # noqa: PLC0415
+        async_create_connection_error_issue,
+        async_create_rate_limited_issue,
+        async_create_session_expired_issue,
+        async_delete_issue_for_entry,
+    )
+
+    return (
+        async_create_connection_error_issue,
+        async_create_rate_limited_issue,
+        async_create_session_expired_issue,
+        async_delete_issue_for_entry,
+    )
 
 
 def get_day_start_at(lessons: list[Lesson] | None, logger: logging.Logger | None = None) -> datetime | None:
@@ -97,25 +113,25 @@ class PronoteDataUpdateCoordinator(TimestampDataUpdateCoordinator):
             try:
                 await self._api_client.authenticate(connection_type, config_data)
                 # Clear any transient issues after successful auth
-                async_delete_issue_for_entry(self.hass, self.config_entry, "session_expired")
-                async_delete_issue_for_entry(self.hass, self.config_entry, "connection_error")
-                async_delete_issue_for_entry(self.hass, self.config_entry, "rate_limited")
+                _get_repairs()[3](self.hass, self.config_entry, "session_expired")
+                _get_repairs()[3](self.hass, self.config_entry, "connection_error")
+                _get_repairs()[3](self.hass, self.config_entry, "rate_limited")
             except AuthenticationError as err:
-                async_create_session_expired_issue(self.hass, self.config_entry)
+                _get_repairs()[2](self.hass, self.config_entry)
                 raise ConfigEntryAuthFailed(f"Authentication failed with Pronote: {err}") from err
             except RateLimitError as err:
-                async_create_rate_limited_issue(self.hass, self.config_entry, err.retry_after)
+                _get_repairs()[1](self.hass, self.config_entry, err.retry_after)
                 raise UpdateFailed(f"Rate limited by Pronote: {err}") from err
             except CircuitBreakerOpenError as err:
                 raise UpdateFailed(f"Pronote API temporarily unavailable: {err}") from err
             except ConnectionError as err:
-                async_create_connection_error_issue(self.hass, self.config_entry, str(err))
+                _get_repairs()[0](self.hass, self.config_entry, str(err))
                 raise UpdateFailed(f"Connection error with Pronote: {err}") from err
             except Exception as err:
                 raise UpdateFailed(f"Error authenticating with Pronote: {err}") from err
 
             if not self._api_client.is_authenticated():
-                async_create_session_expired_issue(self.hass, self.config_entry)
+                _get_repairs()[2](self.hass, self.config_entry)
                 raise ConfigEntryAuthFailed("Unable to authenticate with Pronote")
 
             # Save credentials immediately after successful auth (token is single-use)
@@ -142,10 +158,10 @@ class PronoteDataUpdateCoordinator(TimestampDataUpdateCoordinator):
                 show_all_periods=show_all_periods,
             )
             # Clear all transient issues after successful fetch
-            async_delete_issue_for_entry(self.hass, self.config_entry, "connection_error")
-            async_delete_issue_for_entry(self.hass, self.config_entry, "rate_limited")
+            _get_repairs()[3](self.hass, self.config_entry, "connection_error")
+            _get_repairs()[3](self.hass, self.config_entry, "rate_limited")
         except RateLimitError as err:
-            async_create_rate_limited_issue(self.hass, self.config_entry, err.retry_after)
+            _get_repairs()[1](self.hass, self.config_entry, err.retry_after)
             raise UpdateFailed(f"Rate limited by Pronote: {err}") from err
         except AuthenticationError as err:
             self._api_client.reset()  # Force re-auth on next refresh
@@ -156,7 +172,7 @@ class PronoteDataUpdateCoordinator(TimestampDataUpdateCoordinator):
             raise UpdateFailed(f"Invalid response from Pronote: {err}") from err
         except ConnectionError as err:
             self._api_client.reset()
-            async_create_connection_error_issue(self.hass, self.config_entry, str(err))
+            _get_repairs()[0](self.hass, self.config_entry, str(err))
             raise UpdateFailed(f"Connection error: {err}") from err
         except Exception as err:
             self._api_client.reset()
