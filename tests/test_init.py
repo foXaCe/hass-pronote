@@ -84,7 +84,7 @@ class TestAsyncSetupEntry:
         hass.config_entries.async_forward_entry_setups = AsyncMock()
 
         with patch(
-            "custom_components.pronote.PronoteDataUpdateCoordinator",
+            "custom_components.pronote.coordinator.PronoteDataUpdateCoordinator",
             return_value=mock_coordinator,
         ):
             result = await async_setup_entry(hass, entry)
@@ -111,7 +111,7 @@ class TestAsyncSetupEntry:
 
         with (
             patch(
-                "custom_components.pronote.PronoteDataUpdateCoordinator",
+                "custom_components.pronote.coordinator.PronoteDataUpdateCoordinator",
                 return_value=mock_coordinator,
             ),
             pytest.raises(ConfigEntryNotReady),
