@@ -9,7 +9,7 @@ from datetime import date, datetime, timedelta
 from typing import Any
 from zoneinfo import ZoneInfo
 
-from homeassistant.core import HomeAssistant
+from homeassistant.core import HomeAssistant, callback
 from homeassistant.exceptions import ConfigEntryAuthFailed
 from homeassistant.helpers.debounce import Debouncer
 from homeassistant.helpers.update_coordinator import TimestampDataUpdateCoordinator, UpdateFailed
@@ -23,6 +23,12 @@ from .api import (
     Lesson,
     PronoteAPIClient,
     RateLimitError,
+)
+from .boot_cache import (
+    PronoteBootCache,
+    PronoteBootInfo,
+    async_claim_layout_reload,
+    boot_info_from_data,
 )
 from .const import (
     DEFAULT_ALARM_OFFSET,
@@ -79,6 +85,14 @@ class PronoteDataUpdateCoordinator(TimestampDataUpdateCoordinator):
 
     config_entry: PronoteConfigEntry
 
+    # Boot cache plumbing. Declared at class level so a coordinator built
+    # without going through __init__ (or before attach_boot_cache is called)
+    # still exposes sane defaults.
+    boot_info: PronoteBootInfo | None = None
+    booted_from_cache: bool = False
+    _boot_cache: PronoteBootCache | None = None
+    _boot_reload_scheduled: bool = False
+
     def __init__(self, hass: HomeAssistant, entry: PronoteConfigEntry) -> None:
         """Initialize the coordinator."""
         super().__init__(
@@ -97,6 +111,18 @@ class PronoteDataUpdateCoordinator(TimestampDataUpdateCoordinator):
         self._api_client = PronoteAPIClient(hass)
         self._previous_period_cache: dict[str, Any] | None = None
         self._previous_period_cache_date: date | None = None
+
+    @callback
+    def attach_boot_cache(self, boot_cache: PronoteBootCache, boot_info: PronoteBootInfo | None) -> None:
+        """Attach the boot cache restored by async_setup_entry.
+
+        ``boot_info`` is None on a cold start (first install or unusable
+        cache); in that case the entities are built from the first blocking
+        refresh, exactly like before this cache existed.
+        """
+        self._boot_cache = boot_cache
+        self.boot_info = boot_info
+        self.booted_from_cache = boot_info is not None
 
     async def _async_update_data(self) -> dict[str, Any]:
         """Get the latest data from Pronote and updates the state."""
@@ -238,7 +264,52 @@ class PronoteDataUpdateCoordinator(TimestampDataUpdateCoordinator):
         # Fire events for new items
         self._compare_and_fire_events(previous_data)
 
+        # Refresh the boot cache so the next Home Assistant start can build the
+        # entities without waiting for the network.
+        await self._async_persist_boot_info(data)
+
         return self.data
+
+    async def _async_persist_boot_info(self, data: dict[str, Any]) -> None:
+        """Update and persist the boot info derived from a successful refresh.
+
+        When the fresh data no longer matches the snapshot the entities were
+        built from (new school period, renamed child...), the entry is reloaded
+        once so the entity set is rebuilt right away instead of at the next
+        Home Assistant start.
+        """
+        boot_info = boot_info_from_data(data)
+        if boot_info is None:
+            return
+
+        previous = self.boot_info
+        self.boot_info = boot_info
+
+        if self._boot_cache is None:
+            return
+
+        if previous is not None and previous.identity == boot_info.identity:
+            self._boot_cache.async_schedule_save(boot_info)
+            return
+
+        # Identity changed (or first ever write): persist immediately so a
+        # reload — ours or the user's — never sees the stale snapshot again.
+        await self._boot_cache.async_save(boot_info)
+
+        if not self.booted_from_cache or previous is None or self._boot_reload_scheduled:
+            return
+
+        self._boot_reload_scheduled = True
+        if not async_claim_layout_reload(self.hass, self.config_entry.entry_id):
+            _LOGGER.debug("Pronote entity layout changed again, leaving the new one for the next start")
+            return
+
+        _LOGGER.info(
+            "Pronote data no longer matches the cached entity layout (%s -> %s), reloading the entry",
+            previous.identity,
+            boot_info.identity,
+        )
+        self.hass.config_entries.async_schedule_reload(self.config_entry.entry_id)
 
     def _save_credentials_if_needed(self, config_data: dict[str, Any], connection_type: str) -> None:
         """Save refreshed credentials immediately after auth for QR code connections.
