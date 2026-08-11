@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.15](https://github.com/foXaCe/hass-pronote/compare/v1.1.14...v1.1.15) (2026-08-11)
+
+
+### Performance Improvements
+
+* cache entity layout to keep auth off the startup path ([#30](https://github.com/foXaCe/hass-pronote/issues/30)) ([d17d03d](https://github.com/foXaCe/hass-pronote/commit/d17d03dcaf3f27814aa67ae7b66f2fd59d7a75b4))
+
 ## [1.1.14](https://github.com/foXaCe/hass-pronote/compare/v1.1.13...v1.1.14) (2026-08-10)
 
 
