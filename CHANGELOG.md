@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.16](https://github.com/foXaCe/hass-pronote/compare/v1.1.15...v1.1.16) (2026-08-11)
+
+
+### Bug Fixes
+
+* import pronotepy off the event loop ([#32](https://github.com/foXaCe/hass-pronote/issues/32)) ([1466222](https://github.com/foXaCe/hass-pronote/commit/146622291ef55cd7009405b96fc3c23ca29c9ad5))
+
 ## [1.1.15](https://github.com/foXaCe/hass-pronote/compare/v1.1.14...v1.1.15) (2026-08-11)
 
 
