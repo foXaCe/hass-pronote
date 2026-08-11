@@ -62,15 +62,14 @@ class PronoteCalendar(PronoteEntity, CalendarEntity):
         """Initialize the Pronote calendar entity."""
         super().__init__(coordinator)
 
-        child_info = coordinator.data["child_info"]
-        calendar_name = child_info.name
+        calendar_name = self._boot_info.child_name
         nickname = coordinator.config_entry.options.get("nickname", "")
         if nickname != "":
             calendar_name = nickname
 
         self._attr_translation_key = "timetable"
         self._attr_translation_placeholders = {"child": calendar_name}
-        self._attr_unique_id = f"{DOMAIN}_{coordinator.data['sensor_prefix']}_timetable"
+        self._attr_unique_id = f"{DOMAIN}_{self._boot_info.sensor_prefix}_timetable"
         self._event: CalendarEvent | None = None
 
     @property
@@ -81,7 +80,7 @@ class PronoteCalendar(PronoteEntity, CalendarEntity):
     @callback
     def _handle_coordinator_update(self) -> None:
         """Handle updated data from the coordinator."""
-        lessons = self.coordinator.data.get("lessons_period")
+        lessons = self._get("lessons_period")
         if not lessons:
             self._event = None
         else:
@@ -105,7 +104,7 @@ class PronoteCalendar(PronoteEntity, CalendarEntity):
         end_date: datetime,
     ) -> list[CalendarEvent]:
         """Return calendar events within a datetime range."""
-        lessons = self.coordinator.data.get("lessons_period")
+        lessons = self._get("lessons_period")
         if not lessons:
             return []
         tz = ZoneInfo(hass.config.time_zone)

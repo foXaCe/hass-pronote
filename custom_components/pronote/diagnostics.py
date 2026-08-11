@@ -34,10 +34,17 @@ async def async_get_config_entry_diagnostics(
     data = coordinator.data or {}
 
     child_info = data.get("child_info")
+    boot_info = coordinator.boot_info
 
     return {
         "config_entry": async_redact_data(entry.data, TO_REDACT),
         "options": dict(entry.options),
+        "boot_cache": {
+            "booted_from_cache": bool(coordinator.booted_from_cache),
+            "has_boot_info": boot_info is not None,
+            "current_period_name": getattr(boot_info, "current_period_name", None),
+            "previous_period_names": list(getattr(boot_info, "previous_period_names", ()) or ()),
+        },
         "coordinator": {
             "last_update_success": coordinator.last_update_success,
             "last_update_success_time": str(coordinator.last_update_success_time),

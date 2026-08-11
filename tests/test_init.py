@@ -7,8 +7,23 @@ import pytest
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ConfigEntryNotReady
 
-from custom_components.pronote import async_migrate_entry, async_setup_entry, async_unload_entry, update_listener
+from custom_components.pronote import (
+    async_migrate_entry,
+    async_remove_entry,
+    async_setup_entry,
+    async_unload_entry,
+    update_listener,
+)
+from custom_components.pronote.boot_cache import PronoteBootInfo, async_get_boot_cache
 from custom_components.pronote.const import DEFAULT_REFRESH_INTERVAL, PLATFORMS
+
+BOOT_INFO = PronoteBootInfo(
+    child_name="Jean Dupont",
+    sensor_prefix="jean_dupont",
+    account_type="eleve",
+    current_period_name="Trimestre 2",
+    previous_period_names=("Trimestre 1",),
+)
 
 
 class TestAsyncMigrateEntry:
@@ -117,6 +132,112 @@ class TestAsyncSetupEntry:
             pytest.raises(ConfigEntryNotReady),
         ):
             await async_setup_entry(hass, entry)
+
+
+class TestBootCachePaths:
+    """async_setup_entry picks the blocking or the background path."""
+
+    @staticmethod
+    def _entry():
+        entry = MagicMock()
+        entry.entry_id = "entry1"
+        entry.data = {
+            "username": "jean",
+            "password": "pass",
+            "account_type": "eleve",
+            "connection_type": "username_password",
+        }
+        entry.options = {"refresh_interval": 15, "nickname": ""}
+        entry.async_on_unload = MagicMock()
+
+        def _consume(hass, coro, name, **kwargs):
+            # Close the coroutine instead of scheduling it: the test asserts
+            # on the call, it does not want a real refresh.
+            coro.close()
+            return MagicMock()
+
+        entry.async_create_background_task = MagicMock(side_effect=_consume)
+        return entry
+
+    @staticmethod
+    def _coordinator():
+        async def _refresh():
+            return None
+
+        coordinator = MagicMock()
+        coordinator.async_config_entry_first_refresh = AsyncMock()
+        coordinator.async_refresh = MagicMock(side_effect=lambda: _refresh())
+        return coordinator
+
+    async def test_cold_boot_blocks_and_creates_no_background_task(self, hass: HomeAssistant):
+        entry = self._entry()
+        coordinator = self._coordinator()
+        hass.config_entries.async_forward_entry_setups = AsyncMock()
+
+        with patch(
+            "custom_components.pronote.coordinator.PronoteDataUpdateCoordinator",
+            return_value=coordinator,
+        ):
+            assert await async_setup_entry(hass, entry)
+
+        coordinator.async_config_entry_first_refresh.assert_awaited_once()
+        coordinator.attach_boot_cache.assert_called_once()
+        assert coordinator.attach_boot_cache.call_args[0][1] is None
+        entry.async_create_background_task.assert_not_called()
+
+    async def test_warm_boot_skips_the_blocking_refresh(self, hass: HomeAssistant):
+        entry = self._entry()
+        coordinator = self._coordinator()
+        hass.config_entries.async_forward_entry_setups = AsyncMock()
+        await async_get_boot_cache(hass, "entry1").async_save(BOOT_INFO)
+
+        with patch(
+            "custom_components.pronote.coordinator.PronoteDataUpdateCoordinator",
+            return_value=coordinator,
+        ):
+            assert await async_setup_entry(hass, entry)
+
+        coordinator.async_config_entry_first_refresh.assert_not_awaited()
+        assert coordinator.attach_boot_cache.call_args[0][1] == BOOT_INFO
+        # Platforms are forwarded, then the refresh runs in the background.
+        hass.config_entries.async_forward_entry_setups.assert_awaited_once_with(entry, PLATFORMS)
+        entry.async_create_background_task.assert_called_once()
+        coordinator.async_refresh.assert_called_once()
+        # Non-first refresh: DataUpdateCoordinator turns ConfigEntryAuthFailed
+        # into a reauth flow instead of failing a loaded entry.
+        coordinator.async_config_entry_first_refresh.assert_not_called()
+
+    async def test_corrupted_cache_falls_back_to_the_blocking_path(self, hass: HomeAssistant, hass_storage):
+        entry = self._entry()
+        coordinator = self._coordinator()
+        hass.config_entries.async_forward_entry_setups = AsyncMock()
+        hass_storage["pronote.boot_cache.entry1"] = {
+            "version": 1,
+            "minor_version": 1,
+            "key": "pronote.boot_cache.entry1",
+            "data": {"garbage": True},
+        }
+
+        with patch(
+            "custom_components.pronote.coordinator.PronoteDataUpdateCoordinator",
+            return_value=coordinator,
+        ):
+            assert await async_setup_entry(hass, entry)
+
+        coordinator.async_config_entry_first_refresh.assert_awaited_once()
+        entry.async_create_background_task.assert_not_called()
+
+
+class TestAsyncRemoveEntry:
+    async def test_removes_the_boot_cache(self, hass: HomeAssistant, hass_storage):
+        entry = MagicMock()
+        entry.entry_id = "entry1"
+        await async_get_boot_cache(hass, "entry1").async_save(BOOT_INFO)
+        assert "pronote.boot_cache.entry1" in hass_storage
+
+        await async_remove_entry(hass, entry)
+
+        assert "pronote.boot_cache.entry1" not in hass_storage
 
 
 class TestAsyncUnloadEntry:
