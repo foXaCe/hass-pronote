@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import importlib
 import logging
 import time
 from datetime import timedelta
@@ -45,7 +46,12 @@ async def async_setup_entry(hass: HomeAssistant, entry: PronoteConfigEntry) -> b
       fails the setup cleanly and gets retried by Home Assistant.
     """
     from .boot_cache import async_get_boot_cache  # noqa: PLC0415  # lazy: keeps module import cheap
-    from .coordinator import PronoteDataUpdateCoordinator  # noqa: PLC0415  # lazy: heavy imports (pronotepy)
+
+    # Importing .coordinator pulls in pronotepy, whose first import does
+    # blocking file I/O (ctypes looking up libgmp). Run that import in the
+    # executor so it never blocks the event loop during startup.
+    coordinator_module = await hass.async_add_import_executor_job(importlib.import_module, f"{__package__}.coordinator")
+    PronoteDataUpdateCoordinator = coordinator_module.PronoteDataUpdateCoordinator
 
     t0 = time.perf_counter()
     boot_cache = async_get_boot_cache(hass, entry.entry_id)

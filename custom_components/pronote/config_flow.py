@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import importlib
 import logging
 import uuid
 from typing import Any
@@ -99,7 +100,20 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
     def __init__(self) -> None:
         self._user_inputs: dict = {}
-        self._api_client = _get_api_client()
+        # Built lazily off the event loop: creating it imports pronotepy, whose
+        # first import does blocking file I/O (ctypes looking up libgmp).
+        self._api_client = None
+
+    async def _async_ensure_api_client(self):
+        """Return the API client, importing pronotepy off the event loop.
+
+        pronotepy does blocking file I/O the first time it is imported, so the
+        import must run in the executor rather than in the event loop.
+        """
+        if self._api_client is None:
+            await self.hass.async_add_import_executor_job(importlib.import_module, "pronotepy")
+            self._api_client = _get_api_client()
+        return self._api_client
 
     async def async_step_user(self, user_input: dict | None = None) -> FlowResult:
         """Handle a flow initialized by the user."""
@@ -114,6 +128,7 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         """Handle username/password login step."""
         _LOGGER.info("async_step_up: Connecting via user/password")
         errors: dict[str, str] = {}
+        await self._async_ensure_api_client()
         if user_input is not None:
             try:
                 _LOGGER.debug("User Input received (keys: %s)", list(user_input.keys()))
@@ -143,7 +158,8 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
         return self.async_show_form(
             step_id="username_password_login",
-            data_schema=_step_user_schema_up(),
+            # Building the schema imports pronotepy.ent; keep it off the loop.
+            data_schema=await self.hass.async_add_executor_job(_step_user_schema_up),
             errors=errors,
         )
 
@@ -151,6 +167,7 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         """Handle QR code login step."""
         _LOGGER.info("async_step_up: Connecting via qrcode")
         errors: dict[str, str] = {}
+        await self._async_ensure_api_client()
         if user_input is not None:
             try:
                 _LOGGER.debug("User Input received (keys: %s)", list(user_input.keys()))
@@ -259,8 +276,9 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     async def async_step_reauth(self, entry_data: dict[str, Any]) -> FlowResult:
         """Handle reauth when credentials expire."""
         self._user_inputs = dict(entry_data)
-        # Reset API client for fresh auth
-        self._api_client = _get_api_client()
+        # Reset API client for fresh auth (imports pronotepy off the loop)
+        self._api_client = None
+        await self._async_ensure_api_client()
         return await self.async_step_reauth_confirm()
 
     async def async_step_reauth_confirm(self, user_input: dict | None = None) -> FlowResult:
