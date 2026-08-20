@@ -60,7 +60,7 @@ jobs:
         run: |
           jq -r '.requirements[]' custom_components/pronote/manifest.json > requirements-runtime.txt
           cat requirements-runtime.txt
-      - uses: google/osv-scanner-action/osv-scanner-action@v2.5.0
+      - uses: google/osv-scanner-action/osv-scanner-action@v2.5.1
         with:
           scan-args: |
             --recursive
