@@ -1,4 +1,4 @@
-pytest-homeassistant-custom-component==0.13.359
+pytest-homeassistant-custom-component==0.13.360
 pytest-cov
 pronotepy==2.15.6
 python-slugify==8.0.4
