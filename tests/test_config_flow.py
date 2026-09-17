@@ -73,6 +73,34 @@ async def test_step_user_shows_menu(hass: HomeAssistant) -> None:
     assert "qr_code_login" in result["menu_options"]
 
 
+async def test_qr_form_without_image_decoder(hass: HomeAssistant) -> None:
+    from homeassistant.loader import async_get_integration
+
+    integration = await async_get_integration(hass, DOMAIN)
+    assert not any("zxing" in requirement for requirement in integration.requirements)
+    assert "file_upload" not in integration.dependencies
+
+    with patch.dict("sys.modules", {"zxingcpp": None}):
+        result = await hass.config_entries.flow.async_init(DOMAIN, context={"source": config_entries.SOURCE_USER})
+        result = await hass.config_entries.flow.async_configure(result["flow_id"], {"next_step_id": "qr_code_login"})
+
+    assert result["type"] is FlowResultType.FORM
+    assert result["step_id"] == "qr_code_login"
+    assert {str(key) for key in result["data_schema"].schema} == {"account_type", "qr_code_json", "qr_code_pin"}
+    assert result["data_schema"]({**QR_ELEVE_INPUT, "qr_code_pin": "0001"})["qr_code_pin"] == "0001"
+
+
+async def test_qr_blank_input_does_not_authenticate(hass: HomeAssistant) -> None:
+    result = await hass.config_entries.flow.async_init(DOMAIN, context={"source": config_entries.SOURCE_USER})
+    result = await hass.config_entries.flow.async_configure(result["flow_id"], {"next_step_id": "qr_code_login"})
+    with patch.object(PronoteAPIClient, "authenticate") as authenticate:
+        result = await hass.config_entries.flow.async_configure(
+            result["flow_id"], {**QR_ELEVE_INPUT, "qr_code_json": "   "}
+        )
+    assert result["errors"] == {"base": "qr_code_required"}
+    authenticate.assert_not_called()
+
+
 async def test_up_login_eleve_success(hass: HomeAssistant) -> None:
     """Successful eleve login via UP goes to nickname step."""
     result = await hass.config_entries.flow.async_init(DOMAIN, context={"source": config_entries.SOURCE_USER})

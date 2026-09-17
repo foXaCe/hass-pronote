@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import importlib
-import json
 import logging
 import uuid
 from typing import Any
@@ -14,13 +13,10 @@ import custom_components.pronote._compat  # noqa: F401  # Patch autoslot before 
 # isort: on
 import voluptuous as vol
 from homeassistant import config_entries
-from homeassistant.components.file_upload import process_uploaded_file
-from homeassistant.core import HomeAssistant, callback
+from homeassistant.core import callback
 from homeassistant.data_entry_flow import FlowResult
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.selector import (
-    FileSelector,
-    FileSelectorConfig,
     NumberSelector,
     NumberSelectorConfig,
     NumberSelectorMode,
@@ -88,8 +84,7 @@ def _step_user_schema_up() -> vol.Schema:
 
 
 QR_FIELDS = {
-    vol.Optional("qr_code_image"): FileSelector(FileSelectorConfig(accept="image/*")),
-    vol.Optional("qr_code_json"): str,
+    vol.Required("qr_code_json"): str,
     vol.Required("qr_code_pin"): str,
 }
 
@@ -101,28 +96,6 @@ STEP_USER_DATA_SCHEMA_QR = vol.Schema(
 )
 
 REAUTH_QR_SCHEMA = vol.Schema(QR_FIELDS)
-
-
-def _decode_qr_image(hass: HomeAssistant, file_id: str) -> str:
-    import zxingcpp
-    from PIL import Image
-
-    with process_uploaded_file(hass, file_id) as path:
-        if path.stat().st_size > 12 * 1024 * 1024:
-            raise ValueError("QR image too large")
-        with Image.open(path) as image:
-            if image.width * image.height > 24_000_000:
-                raise ValueError("QR image too large")
-            codes = zxingcpp.read_barcodes(image.convert("RGB"), formats=zxingcpp.BarcodeFormat.QRCode)
-        if len(codes) != 1:
-            raise ValueError("Expected one QR code")
-        text = codes[0].text
-        payload = json.loads(text)
-        if not isinstance(payload, dict) or not all(
-            isinstance(payload.get(key), str) and payload[key] for key in ("url", "login", "jeton")
-        ):
-            raise ValueError("Not a Pronote QR code")
-        return text
 
 
 class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
@@ -197,14 +170,6 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         )
 
     async def _async_prepare_qr_input(self, user_input: dict) -> dict[str, str]:
-        image_id = user_input.pop("qr_code_image", None)
-        if image_id:
-            try:
-                user_input["qr_code_json"] = await self.hass.async_add_executor_job(
-                    _decode_qr_image, self.hass, image_id
-                )
-            except Exception:
-                return {"qr_code_image": "invalid_qr_image"}
         if not user_input.get("qr_code_json", "").strip():
             return {"base": "qr_code_required"}
         return {}

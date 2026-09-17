@@ -48,7 +48,7 @@ Use your Pronote URL with username, password and ENT (optional):
 
 ### Option 2: using the QR Code
 
-**From your phone (recommended):** create the QR Code from your Pronote account, then in the config flow take a photo of it (or pick the screenshot). Enter the PIN used at generation, submit — done.
+Photo upload is temporarily unavailable because its decoder cannot be installed on Home Assistant OS/Container. Create a QR Code from your Pronote account, decode it with a local QR reader, and paste its JSON into the form with the PIN used at generation. Do not upload this credential-bearing QR Code to an online decoder.
 
 **From a computer (alternative):** install the Chrome Extension [QR Code Reader](https://chrome.google.com/webstore/detail/qr-code-reader/likadllkkidlligfcdhfnnbkjigdkmci) (only needed for setup), scan the QR Code with it, then paste the JSON output that looks like:
 ```json
