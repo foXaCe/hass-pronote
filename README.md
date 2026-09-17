@@ -48,20 +48,14 @@ Use your Pronote URL with username, password and ENT (optional):
 
 ### Option 2: using the QR Code
 
-Install the following Chrome Extension: [QR Code Reader](https://chrome.google.com/webstore/detail/qr-code-reader/likadllkkidlligfcdhfnnbkjigdkmci) (only needed for setup).
+**From your phone (recommended):** create the QR Code from your Pronote account, then in the config flow take a photo of it (or pick the screenshot). Enter the PIN used at generation, submit — done.
 
-Create the QR Code from your Pronote account:
-![image](doc/generate_qr_code.png)
-
-Use the extension to scan the QR Code:
-![image](doc/scan_qr_code.png)
-
-And copy the JSON ouput that looks like:
+**From a computer (alternative):** install the Chrome Extension [QR Code Reader](https://chrome.google.com/webstore/detail/qr-code-reader/likadllkkidlligfcdhfnnbkjigdkmci) (only needed for setup), scan the QR Code with it, then paste the JSON output that looks like:
 ```json
 {"jeton":"XXXXXXXXXXX[...]XXXXXXXXXXXXXX","login":"YYYYYYYYYYYYYY","url":"https://[id of your school].index-education.net/pronote/..."}
 ```
 
-Paste it, and enter the PIN code used for the generation:
+In both cases, enter the PIN code used for the generation:
 ![image](doc/config_flow_qr_code.png)
 
 ### Parent account

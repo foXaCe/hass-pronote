@@ -5,6 +5,9 @@
     "@foXaCe"
   ],
   "config_flow": true,
+  "dependencies": [
+    "file_upload"
+  ],
   "documentation": "https://github.com/foXaCe/hass-pronote",
   "integration_type": "service",
   "iot_class": "cloud_polling",
@@ -15,7 +18,8 @@
   ],
   "requirements": [
     "pronotepy==2.15.7",
-    "python-slugify==8.0.4"
+    "python-slugify==8.0.4",
+    "zxing-cpp==3.1.1"
   ],
   "version": "1.1.16"
 }

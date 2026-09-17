@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import importlib
+import json
 import logging
 import uuid
 from typing import Any
@@ -13,10 +14,13 @@ import custom_components.pronote._compat  # noqa: F401  # Patch autoslot before 
 # isort: on
 import voluptuous as vol
 from homeassistant import config_entries
-from homeassistant.core import callback
+from homeassistant.components.file_upload import process_uploaded_file
+from homeassistant.core import HomeAssistant, callback
 from homeassistant.data_entry_flow import FlowResult
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.selector import (
+    FileSelector,
+    FileSelectorConfig,
     NumberSelector,
     NumberSelectorConfig,
     NumberSelectorMode,
@@ -83,13 +87,42 @@ def _step_user_schema_up() -> vol.Schema:
     )
 
 
+QR_FIELDS = {
+    vol.Optional("qr_code_image"): FileSelector(FileSelectorConfig(accept="image/*")),
+    vol.Optional("qr_code_json"): str,
+    vol.Required("qr_code_pin"): str,
+}
+
 STEP_USER_DATA_SCHEMA_QR = vol.Schema(
     {
         vol.Required("account_type"): ACCOUNT_TYPE_SELECTOR,
-        vol.Required("qr_code_json"): str,
-        vol.Required("qr_code_pin"): str,
+        **QR_FIELDS,
     }
 )
+
+REAUTH_QR_SCHEMA = vol.Schema(QR_FIELDS)
+
+
+def _decode_qr_image(hass: HomeAssistant, file_id: str) -> str:
+    import zxingcpp
+    from PIL import Image
+
+    with process_uploaded_file(hass, file_id) as path:
+        if path.stat().st_size > 12 * 1024 * 1024:
+            raise ValueError("QR image too large")
+        with Image.open(path) as image:
+            if image.width * image.height > 24_000_000:
+                raise ValueError("QR image too large")
+            codes = zxingcpp.read_barcodes(image.convert("RGB"), formats=zxingcpp.BarcodeFormat.QRCode)
+        if len(codes) != 1:
+            raise ValueError("Expected one QR code")
+        text = codes[0].text
+        payload = json.loads(text)
+        if not isinstance(payload, dict) or not all(
+            isinstance(payload.get(key), str) and payload[key] for key in ("url", "login", "jeton")
+        ):
+            raise ValueError("Not a Pronote QR code")
+        return text
 
 
 class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
@@ -163,12 +196,28 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             errors=errors,
         )
 
+    async def _async_prepare_qr_input(self, user_input: dict) -> dict[str, str]:
+        image_id = user_input.pop("qr_code_image", None)
+        if image_id:
+            try:
+                user_input["qr_code_json"] = await self.hass.async_add_executor_job(
+                    _decode_qr_image, self.hass, image_id
+                )
+            except Exception:
+                return {"qr_code_image": "invalid_qr_image"}
+        if not user_input.get("qr_code_json", "").strip():
+            return {"base": "qr_code_required"}
+        return {}
+
     async def async_step_qr_code_login(self, user_input: dict | None = None) -> FlowResult:
         """Handle QR code login step."""
         _LOGGER.info("async_step_up: Connecting via qrcode")
         errors: dict[str, str] = {}
-        await self._async_ensure_api_client()
         if user_input is not None:
+            user_input = dict(user_input)
+            errors = await self._async_prepare_qr_input(user_input)
+        if user_input is not None and not errors:
+            await self._async_ensure_api_client()
             try:
                 _LOGGER.debug("User Input received (keys: %s)", list(user_input.keys()))
                 self._user_inputs.update(user_input)
@@ -284,10 +333,12 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     async def async_step_reauth_confirm(self, user_input: dict | None = None) -> FlowResult:
         """Handle reauth confirmation."""
         errors: dict[str, str] = {}
+        connection_type = self._user_inputs.get("connection_type", "username_password")
+        if user_input is not None and connection_type == "qrcode":
+            user_input = dict(user_input)
+            errors = await self._async_prepare_qr_input(user_input)
 
-        if user_input is not None:
-            connection_type = self._user_inputs.get("connection_type", "username_password")
-
+        if user_input is not None and not errors:
             if connection_type == "qrcode":
                 self._user_inputs["qr_code_json"] = user_input.get("qr_code_json", "")
                 self._user_inputs["qr_code_pin"] = user_input.get("qr_code_pin", "")
@@ -333,12 +384,7 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
         connection_type = self._user_inputs.get("connection_type", "username_password")
         if connection_type == "qrcode":
-            schema = vol.Schema(
-                {
-                    vol.Required("qr_code_json"): str,
-                    vol.Required("qr_code_pin"): str,
-                }
-            )
+            schema = REAUTH_QR_SCHEMA
         else:
             schema = vol.Schema(
                 {

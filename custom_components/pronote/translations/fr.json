@@ -19,10 +19,11 @@
             "qr_code_login": {
                 "data": {
                     "account_type": "Type de compte",
-                    "qr_code_json": "JSON du QR Code",
+                    "qr_code_image": "Photo du QR Code (depuis le téléphone)",
+                    "qr_code_json": "JSON du QR Code (alternative)",
                     "qr_code_pin": "PIN utilisé en créant le QR Code"
                 },
-                "description": "JSON du QR Code"
+                "description": "Scannez le QR Code : prenez une photo depuis votre téléphone, ou collez le JSON du QR Code. Saisissez ensuite le PIN utilisé à la génération."
             },
             "parent": {
                 "data": {
@@ -38,7 +39,8 @@
                 "description": "Vos identifiants Pronote ont expiré. Veuillez les saisir à nouveau.",
                 "data": {
                     "password": "Mot de passe",
-                    "qr_code_json": "JSON du QR Code",
+                    "qr_code_image": "Photo du QR Code (depuis le téléphone)",
+                    "qr_code_json": "JSON du QR Code (alternative)",
                     "qr_code_pin": "PIN utilisé en créant le QR Code"
                 }
             }
@@ -46,7 +48,9 @@
         "error": {
             "cannot_connect": "Impossible de se connecter",
             "invalid_auth": "Erreur d'authentification",
-            "unknown": "Une erreur est survenue"
+            "unknown": "Une erreur est survenue",
+            "qr_code_image": "Photo illisible ou QR Code Pronote introuvable",
+            "qr_code_required": "Fournissez la photo du QR Code ou son JSON"
         },
         "abort": {
             "already_configured": "Intégration déjà configurée",
