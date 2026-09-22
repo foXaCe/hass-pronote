@@ -4,7 +4,7 @@ import contextlib
 import json
 from pathlib import Path
 from types import SimpleNamespace
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from homeassistant import config_entries
@@ -927,3 +927,58 @@ class TestTwoFactorSettingsLiveInOptions:
         assert "account_pin" in keys
         # The value already stored at setup is what the form starts from.
         assert keys["device_name"].default() == "Salon"
+
+
+class TestReauthReloadsWithoutTheDeprecatedHelper:
+    """async_update_reload_and_abort warns when the entry has an update listener.
+
+    It reloads on the caller's behalf and assumes the listener reloads too.
+    Ours does not — async_update_entry also fires on every token rotation, so
+    a reloading listener would restart the integration on each
+    authentication. Home Assistant drops the helper's behaviour in 2026.12.
+    """
+
+    @staticmethod
+    def _entry(hass):
+        entry = MockConfigEntry(
+            domain=DOMAIN,
+            data={
+                "connection_type": "qrcode",
+                "account_type": "eleve",
+                "qr_code_url": "https://pronote.example.com/pronote/eleve.html",
+                "qr_code_username": "old_user",
+                "qr_code_password": "old_pass",
+                "qr_code_uuid": "old_uuid",
+            },
+            unique_id="Jean Dupont",
+            version=3,
+        )
+        entry.add_to_hass(hass)
+        return entry
+
+    async def test_it_updates_and_reloads_without_warning(self, hass: HomeAssistant, caplog) -> None:
+        entry = self._entry(hass)
+        # The very listener that makes Home Assistant complain.
+        entry.async_on_unload(entry.add_update_listener(AsyncMock()))
+
+        result = await entry.start_reauth_flow(hass)
+
+        with (
+            patch(
+                "custom_components.pronote.api.auth.PronoteAuth.authenticate",
+                return_value=(_make_qr_client("Jean Dupont"), _make_credentials()),
+            ),
+            patch.object(hass.config_entries, "async_schedule_reload") as reload,
+        ):
+            result = await hass.config_entries.flow.async_configure(
+                result["flow_id"], {"qr_code_json": '{"new":"data"}', "qr_code_pin": "9999"}
+            )
+
+        assert result["type"] is FlowResultType.ABORT
+        assert result["reason"] == "reauth_successful"
+        # The new credentials are persisted...
+        assert entry.data["qr_code_password"] == "qr_pass"
+        # ...the entry is reloaded exactly once...
+        reload.assert_called_once_with(entry.entry_id)
+        # ...and Home Assistant has nothing to report.
+        assert "has an update listener" not in caplog.text
