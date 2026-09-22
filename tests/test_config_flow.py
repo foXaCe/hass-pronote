@@ -138,6 +138,24 @@ async def test_decoder_is_never_a_hard_requirement(hass: HomeAssistant) -> None:
     )
 
 
+async def test_slugify_is_never_pinned_by_this_integration(hass: HomeAssistant) -> None:
+    """Home Assistant pins python-slugify itself, so pinning it here can only conflict.
+
+    Renovate raised it to v9, which pip refused outright: homeassistant
+    depends on python-slugify==8.0.4, and the resolution became impossible.
+    The package ships with Home Assistant, so importing it needs no
+    requirement of our own.
+    """
+    from homeassistant.loader import async_get_integration
+
+    integration = await async_get_integration(hass, DOMAIN)
+    assert not any(requirement.lower().startswith("python-slugify") for requirement in integration.requirements)
+
+    from slugify import slugify
+
+    assert slugify("Trimestre 1", separator="_") == "trimestre_1"
+
+
 async def test_qr_form_without_image_decoder(hass: HomeAssistant, no_qr_decoder) -> None:
     """Without a decoder, the form falls back to the JSON field only."""
     result = await hass.config_entries.flow.async_init(DOMAIN, context={"source": config_entries.SOURCE_USER})
