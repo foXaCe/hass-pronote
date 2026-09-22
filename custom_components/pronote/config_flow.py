@@ -451,6 +451,21 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         await self._async_ensure_api_client()
         return await self.async_step_reauth_confirm()
 
+    def _async_finish_reauth(self) -> FlowResult:
+        """Persist the new credentials, reload the entry, and close the flow.
+
+        Not async_update_reload_and_abort: it reloads on the caller's behalf
+        and warns when the entry has an update listener, assuming the listener
+        reloads too and that the entry is therefore reloaded twice. Ours does
+        not — it only adjusts the refresh interval, because async_update_entry
+        also fires on every token rotation, and reloading there would restart
+        the integration on each authentication.
+        """
+        entry = self._get_reauth_entry()
+        self.hass.config_entries.async_update_entry(entry, data=self._user_inputs)
+        self.hass.config_entries.async_schedule_reload(entry.entry_id)
+        return self.async_abort(reason="reauth_successful")
+
     async def async_step_reauth_confirm(self, user_input: dict | None = None) -> FlowResult:
         """Handle reauth confirmation."""
         errors: dict[str, str] = {}
@@ -487,10 +502,7 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                         self._user_inputs["qr_code_username"] = creds.username
                         self._user_inputs["qr_code_password"] = creds.password
                         self._user_inputs["qr_code_uuid"] = creds.uuid
-                    return self.async_update_reload_and_abort(
-                        self._get_reauth_entry(),
-                        data=self._user_inputs,
-                    )
+                    return self._async_finish_reauth()
             else:
                 self._user_inputs["password"] = user_input["password"]
                 try:
@@ -504,10 +516,7 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     _LOGGER.exception("Unexpected error during password reauth")
                     errors["base"] = "unknown"
                 else:
-                    return self.async_update_reload_and_abort(
-                        self._get_reauth_entry(),
-                        data=self._user_inputs,
-                    )
+                    return self._async_finish_reauth()
 
         connection_type = self._user_inputs.get("connection_type", "username_password")
         if connection_type == "qrcode":
