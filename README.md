@@ -48,15 +48,24 @@ Use your Pronote URL with username, password and ENT (optional):
 
 ### Option 2: using the QR Code
 
-Photo upload is temporarily unavailable because its decoder cannot be installed on Home Assistant OS/Container. Create a QR Code from your Pronote account, decode it with a local QR reader, and paste its JSON into the form with the PIN used at generation. Do not upload this credential-bearing QR Code to an online decoder.
+Create a QR Code from your Pronote account, then give the form its photo and the PIN you chose at generation. Those two fields are all it asks for.
 
-**From a computer (alternative):** install the Chrome Extension [QR Code Reader](https://chrome.google.com/webstore/detail/qr-code-reader/likadllkkidlligfcdhfnnbkjigdkmci) (only needed for setup), scan the QR Code with it, then paste the JSON output that looks like:
+A QR Code lasts ten minutes and works **once**: if a setup attempt fails, generate a new one rather than reusing it.
+
+**Photo of the QR Code.** The upload field appears when a QR decoder is importable on your Home Assistant, that is both `pyzbar` (with the system `libzbar` library) and `Pillow`. Neither is declared as a requirement of this integration on purpose: a hard requirement for a decoder once made the whole config flow fail with a 500 on Home Assistant OS/Container. The picture is decoded locally; nothing is sent anywhere.
+
+**Built-in QR Code reader.** When the photo cannot be read on the server — no decoder installed, or a blurry shot — the form links to a reader page served by the integration itself. It decodes the QR Code **in your browser** (the native `BarcodeDetector`, falling back to a bundled copy of [jsQR](https://github.com/cozmo/jsQR)), from a picture or from the camera, and gives you the JSON to paste back. Nothing leaves your browser, and no extension is needed.
+
+Do not upload this credential-bearing QR Code to an online decoder.
+
+The JSON it produces looks like:
 ```json
 {"jeton":"XXXXXXXXXXX[...]XXXXXXXXXXXXXX","login":"YYYYYYYYYYYYYY","url":"https://[id of your school].index-education.net/pronote/..."}
 ```
 
-In both cases, enter the PIN code used for the generation:
 ![image](doc/config_flow_qr_code.png)
+
+**Two-factor settings.** Pronote may re-run its mobile two-factor check days after the pairing, and answering it needs a device name and sometimes a PIN. Both have working defaults — the device is named `Home Assistant`, and the QR Code PIN doubles as the account PIN — so they are not asked at setup. If your Pronote mobile-app PIN differs from the QR Code one, set it in the integration options.
 
 ### Parent account
 

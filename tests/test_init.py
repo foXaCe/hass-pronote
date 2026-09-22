@@ -15,7 +15,7 @@ from custom_components.pronote import (
     update_listener,
 )
 from custom_components.pronote.boot_cache import PronoteBootInfo, async_get_boot_cache
-from custom_components.pronote.const import DEFAULT_REFRESH_INTERVAL, PLATFORMS
+from custom_components.pronote.const import DEFAULT_DEVICE_NAME, DEFAULT_REFRESH_INTERVAL, PLATFORMS
 
 BOOT_INFO = PronoteBootInfo(
     child_name="Jean Dupont",
@@ -27,7 +27,7 @@ BOOT_INFO = PronoteBootInfo(
 
 
 class TestAsyncMigrateEntry:
-    async def test_migrate_v1_to_v2(self, hass: HomeAssistant):
+    async def test_migrate_v1_to_v3(self, hass: HomeAssistant):
         entry = MagicMock()
         entry.version = 1
         entry.data = {"username": "jean", "password": "pass"}
@@ -38,22 +38,52 @@ class TestAsyncMigrateEntry:
         result = await async_migrate_entry(hass, entry)
 
         assert result is True
-        assert entry.version == 2
         hass.config_entries.async_update_entry.assert_called_once()
-        call_args = hass.config_entries.async_update_entry.call_args
-        new_data = call_args[1].get("data") or call_args.kwargs.get("data")
+        call_kwargs = hass.config_entries.async_update_entry.call_args.kwargs
+        assert call_kwargs["version"] == 3
+        new_data = call_kwargs["data"]
         assert new_data["connection_type"] == "username_password"
         assert new_data["username"] == "jean"
+        assert new_data["device_name"] == DEFAULT_DEVICE_NAME
 
-    async def test_migrate_v2_no_change(self, hass: HomeAssistant):
+    async def test_migrate_v2_adds_device_name(self, hass: HomeAssistant):
+        """A v2 entry only misses the device name Pronote asks for at re-registration."""
         entry = MagicMock()
         entry.version = 2
-        entry.data = {"username": "jean", "connection_type": "username_password"}
+        entry.data = {"username": "jean", "connection_type": "qrcode"}
+
+        hass.config_entries.async_update_entry = MagicMock()
 
         result = await async_migrate_entry(hass, entry)
 
         assert result is True
-        assert entry.version == 2
+        call_kwargs = hass.config_entries.async_update_entry.call_args.kwargs
+        assert call_kwargs["version"] == 3
+        assert call_kwargs["data"]["device_name"] == DEFAULT_DEVICE_NAME
+        assert call_kwargs["data"]["connection_type"] == "qrcode"
+
+    async def test_migrate_keeps_a_custom_device_name(self, hass: HomeAssistant):
+        entry = MagicMock()
+        entry.version = 2
+        entry.data = {"connection_type": "qrcode", "device_name": "Salon"}
+
+        hass.config_entries.async_update_entry = MagicMock()
+
+        await async_migrate_entry(hass, entry)
+
+        assert hass.config_entries.async_update_entry.call_args.kwargs["data"]["device_name"] == "Salon"
+
+    async def test_migrate_v3_no_change(self, hass: HomeAssistant):
+        entry = MagicMock()
+        entry.version = 3
+        entry.data = {"username": "jean", "connection_type": "username_password"}
+
+        hass.config_entries.async_update_entry = MagicMock()
+
+        result = await async_migrate_entry(hass, entry)
+
+        assert result is True
+        hass.config_entries.async_update_entry.assert_not_called()
 
 
 class TestUpdateListener:

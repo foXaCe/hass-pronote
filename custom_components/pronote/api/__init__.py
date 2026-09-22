@@ -9,7 +9,9 @@ from .exceptions import (
     CircuitBreakerOpenError,
     ConnectionError,
     InvalidResponseError,
+    IPSuspendedError,
     PronoteAPIError,
+    QRCodeRejectedError,
     RateLimitError,
     SessionExpiredError,
 )
@@ -37,9 +39,11 @@ __all__ = [
     "CircuitBreaker",
     # Exceptions
     "AuthenticationError",
+    "QRCodeRejectedError",
     "CircuitBreakerOpenError",
     "ConnectionError",
     "InvalidResponseError",
+    "IPSuspendedError",
     "PronoteAPIError",
     "RateLimitError",
     "SessionExpiredError",

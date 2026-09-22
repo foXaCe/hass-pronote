@@ -19,10 +19,15 @@
             "qr_code_login": {
                 "data": {
                     "account_type": "Type de compte",
+                    "qr_code_image": "Photo du QR Code",
                     "qr_code_json": "JSON du QR Code",
-                    "qr_code_pin": "PIN utilisé en créant le QR Code"
+                    "qr_code_pin": "PIN choisi lors de la génération du QR Code"
                 },
-                "description": "Collez le JSON du QR Code, puis saisissez le PIN utilisé à la génération. L’import de photo est temporairement indisponible."
+                "description": "Déposez la photo du QR Code et saisissez son PIN : c'est tout. Pas de photo sous la main ? Le [lecteur de QR Code]({qr_reader_url}) en tire le JSON, dans votre navigateur, sans l'envoyer nulle part. Un QR Code dure dix minutes et ne sert qu'une fois.",
+                "data_description": {
+                    "qr_code_image": "Une photo de l'écran, ou une capture. Lue sur ce Home Assistant, rien n'est envoyé ailleurs.",
+                    "qr_code_pin": "Les quatre chiffres saisis dans Pronote au moment de l'affichage du QR Code."
+                }
             },
             "parent": {
                 "data": {
@@ -35,11 +40,16 @@
                 }
             },
             "reauth_confirm": {
-                "description": "Vos identifiants Pronote ont expiré. Veuillez les saisir à nouveau.",
+                "description": "Vos identifiants Pronote ont expiré. Déposez la photo d'un nouveau QR Code et saisissez son PIN. Le [lecteur de QR Code]({qr_reader_url}) peut en tirer le JSON si ce Home Assistant ne sait pas lire la photo.",
                 "data": {
                     "password": "Mot de passe",
+                    "qr_code_image": "Photo du QR Code",
                     "qr_code_json": "JSON du QR Code",
-                    "qr_code_pin": "PIN utilisé en créant le QR Code"
+                    "qr_code_pin": "PIN choisi lors de la génération du QR Code"
+                },
+                "data_description": {
+                    "qr_code_image": "Une photo de l'écran, ou une capture. Lue sur ce Home Assistant, rien n'est envoyé ailleurs.",
+                    "qr_code_pin": "Les quatre chiffres saisis dans Pronote au moment de l'affichage du QR Code."
                 }
             }
         },
@@ -47,7 +57,11 @@
             "cannot_connect": "Impossible de se connecter",
             "invalid_auth": "Erreur d'authentification",
             "unknown": "Une erreur est survenue",
-            "qr_code_required": "Fournissez le JSON du QR Code"
+            "invalid_qr_image": "Photo illisible, ou aucun QR Code Pronote trouvé dessus",
+            "qr_code_required": "Fournissez la photo du QR Code ou son JSON",
+            "qr_decoder_missing": "Aucun décodeur de QR Code installé sur ce Home Assistant ; collez plutôt le JSON du QR Code",
+            "qr_code_rejected": "Pronote a refusé ce QR Code : PIN incorrect, ou QR Code expiré ou déjà utilisé. Générez-en un nouveau dans Pronote — il dure dix minutes et ne sert qu'une fois.",
+            "ip_suspended": "Pronote a suspendu cette adresse IP après trop de tentatives de connexion. Attendez une quinzaine de minutes avant de réessayer — réessayer tout de suite ne fait que prolonger la suspension."
         },
         "abort": {
             "already_configured": "Intégration déjà configurée",
@@ -108,7 +122,9 @@
                     "lunch_break_time": "Heure palier pour le calcul de la pause repas (HH:MM)",
                     "alarm_offset": "Calcul de l'heure du réveil (en minutes, avant le premier cours du jour)",
                     "grades_to_display": "Nombre maximum de notes par entité (entre 1 et 50)",
-                    "show_all_periods": "Créer des entités pour les périodes futures (par semestre ou trimestre)"
+                    "show_all_periods": "Créer des entités pour les périodes futures (par semestre ou trimestre)",
+                    "device_name": "Nom de l'appareil dans Pronote",
+                    "account_pin": "PIN de double authentification (laisser vide)"
                 }
             }
         }

@@ -11,23 +11,32 @@ from homeassistant.core import HomeAssistant
 
 import custom_components.pronote._compat  # noqa: F401  # Apply autoslot hotfix before pronotepy
 
-from .const import DEFAULT_REFRESH_INTERVAL, PLATFORMS, PronoteConfigEntry
+from .const import DEFAULT_DEVICE_NAME, DEFAULT_REFRESH_INTERVAL, PLATFORMS, PronoteConfigEntry
 
 _LOGGER = logging.getLogger(__name__)
 
 
 async def async_migrate_entry(hass, config_entry) -> bool:
     """Migrate old entry."""
-    _LOGGER.debug("Migrating from version %s", config_entry.version)
+    version = config_entry.version
+    _LOGGER.debug("Migrating from version %s", version)
 
-    if config_entry.version == 1:
-        new = {**config_entry.data}
+    if version >= 3:
+        return True
+
+    new = {**config_entry.data}
+
+    if version == 1:
         new["connection_type"] = "username_password"
 
-        config_entry.version = 2
-        hass.config_entries.async_update_entry(config_entry, data=new)
+    # v3: Pronote re-runs its mobile two-factor check days after the pairing
+    # and refuses the saved token without a device name, which forced a QR
+    # rescan every few days.
+    new.setdefault("device_name", DEFAULT_DEVICE_NAME)
 
-    _LOGGER.debug("Migration to version %s successful", config_entry.version)
+    hass.config_entries.async_update_entry(config_entry, data=new, version=3)
+
+    _LOGGER.debug("Migration to version 3 successful")
 
     return True
 

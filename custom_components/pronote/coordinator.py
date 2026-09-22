@@ -129,7 +129,7 @@ class PronoteDataUpdateCoordinator(TimestampDataUpdateCoordinator):
         today = date.today()
         previous_data = None if self.data is None else self.data.copy()
 
-        config_data = dict(self.config_entry.data)
+        config_data = self._auth_config()
         connection_type = config_data.get("connection_type", "username_password")
 
         # Authentication (skip if session still active)
@@ -311,6 +311,20 @@ class PronoteDataUpdateCoordinator(TimestampDataUpdateCoordinator):
         )
         self.hass.config_entries.async_schedule_reload(self.config_entry.entry_id)
 
+    def _auth_config(self) -> dict[str, Any]:
+        """Entry data, with the two-factor settings the options may override.
+
+        device_name and account_pin are set in the options rather than at
+        setup: Pronote only asks for them when it re-runs its two-factor
+        check, long after the integration was added.
+        """
+        config_data = dict(self.config_entry.data)
+        for key in ("device_name", "account_pin"):
+            value = self.config_entry.options.get(key)
+            if value:
+                config_data[key] = value
+        return config_data
+
     def _save_credentials_if_needed(self, config_data: dict[str, Any], connection_type: str) -> None:
         """Save refreshed credentials immediately after auth for QR code connections.
 
@@ -333,10 +347,11 @@ class PronoteDataUpdateCoordinator(TimestampDataUpdateCoordinator):
         new_data["qr_code_uuid"] = credentials.uuid
         new_data["client_identifier"] = credentials.client_identifier
 
-        # Remove single-use QR code data — it cannot be reused and would
+        # Remove the single-use QR payload — it cannot be reused and would
         # cause a stale fallback attempt on next token_login failure.
+        # qr_code_pin is kept on purpose: Pronote re-runs its two-factor check
+        # days after the pairing, and the PIN is needed to answer it.
         new_data.pop("qr_code_json", None)
-        new_data.pop("qr_code_pin", None)
 
         self.hass.config_entries.async_update_entry(self.config_entry, data=new_data)
         _LOGGER.debug("Pronote token updated and persisted to config entry successfully")

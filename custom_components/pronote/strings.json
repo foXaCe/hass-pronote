@@ -19,10 +19,15 @@
       "qr_code_login": {
         "data": {
           "account_type": "Account type",
+          "qr_code_image": "QR Code photo",
           "qr_code_json": "QR Code JSON",
-          "qr_code_pin": "PIN code"
+          "qr_code_pin": "PIN chosen when generating the QR Code"
         },
-        "description": "Paste the QR Code JSON and enter the PIN used at generation. Photo upload is temporarily unavailable."
+        "description": "Upload the QR Code photo and enter its PIN: that is all. No photo at hand? The [QR Code reader]({qr_reader_url}) turns one into JSON, in your browser, without sending it anywhere. A QR Code lasts ten minutes and works once.",
+        "data_description": {
+          "qr_code_image": "A photo of the screen, or a screenshot. Read on this Home Assistant, nothing is sent out.",
+          "qr_code_pin": "The four digits you typed in Pronote when the QR Code was displayed."
+        }
       },
       "parent": {
         "data": {
@@ -35,11 +40,16 @@
         }
       },
       "reauth_confirm": {
-        "description": "Your Pronote credentials have expired. Please re-enter them.",
+        "description": "Your Pronote credentials have expired. Upload a fresh QR Code photo and enter its PIN. The [QR Code reader]({qr_reader_url}) can turn a photo into JSON if this Home Assistant cannot read it.",
         "data": {
           "password": "[%key:common::config_flow::data::password%]",
+          "qr_code_image": "QR Code photo",
           "qr_code_json": "QR Code JSON",
-          "qr_code_pin": "PIN code"
+          "qr_code_pin": "PIN chosen when generating the QR Code"
+        },
+        "data_description": {
+          "qr_code_image": "A photo of the screen, or a screenshot. Read on this Home Assistant, nothing is sent out.",
+          "qr_code_pin": "The four digits you typed in Pronote when the QR Code was displayed."
         }
       }
     },
@@ -47,7 +57,11 @@
       "cannot_connect": "[%key:common::config_flow::error::cannot_connect%]",
       "invalid_auth": "[%key:common::config_flow::error::invalid_auth%]",
       "unknown": "[%key:common::config_flow::error::unknown%]",
-      "qr_code_required": "Provide the QR Code JSON"
+      "invalid_qr_image": "Unreadable photo, or no Pronote QR Code found in it",
+      "qr_code_required": "Provide the QR Code photo or its JSON",
+      "qr_decoder_missing": "No QR decoder installed on this Home Assistant; paste the QR Code JSON instead",
+      "qr_code_rejected": "Pronote refused this QR Code: wrong PIN, or the QR Code has expired or was already used. Generate a new one in Pronote — it lasts ten minutes and works once.",
+      "ip_suspended": "Pronote has suspended this IP address after too many login attempts. Wait about fifteen minutes before trying again — retrying now only makes it last longer."
     },
     "abort": {
       "already_configured": "[%key:common::config_flow::abort::already_configured_device%]",
@@ -108,7 +122,9 @@
           "lunch_break_time": "Lunch break threshold time (HH:MM)",
           "alarm_offset": "Time delta for alarm (in minutes, before first lesson of the day)",
           "grades_to_display": "Max number of grades per entity (between 1 and 50)",
-          "show_all_periods": "Create entities for future periods (per semester or trimester)"
+          "show_all_periods": "Create entities for future periods (per semester or trimester)",
+          "device_name": "Device name in Pronote",
+          "account_pin": "Two-factor PIN (leave empty)"
         }
       }
     }

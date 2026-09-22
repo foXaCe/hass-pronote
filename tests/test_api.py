@@ -10,12 +10,15 @@ from custom_components.pronote.api import (
     AuthenticationError,
     CircuitBreakerOpenError,
     InvalidResponseError,
+    IPSuspendedError,
     Lesson,
     PronoteAPIClient,
+    QRCodeRejectedError,
     RateLimitError,
 )
 from custom_components.pronote.api.auth import PronoteAuth
 from custom_components.pronote.api.circuit_breaker import CircuitBreaker
+from custom_components.pronote.const import DEFAULT_DEVICE_NAME
 
 
 class TestCircuitBreaker:
@@ -1198,6 +1201,305 @@ class TestPronoteAuthUsernamePassword:
         assert not hasattr(mock_client, "account_pin")
 
 
+class TestPronoteAuthTwoFactor:
+    """Pronote re-runs its mobile 2FA days after the pairing.
+
+    pronotepy then needs a PIN and a device name, otherwise it raises MFAError
+    and the saved token can never be used again.
+    """
+
+    BASE = {
+        "qr_code_url": "https://example.com",
+        "qr_code_username": "user",
+        "qr_code_password": "token",
+        "qr_code_uuid": "uuid123",
+    }
+
+    @staticmethod
+    def _client():
+        client = MagicMock()
+        client.export_credentials.return_value = {
+            "pronote_url": "https://example.com",
+            "username": "user",
+            "password": "new_token",
+            "uuid": "uuid123",
+        }
+        return client
+
+    def test_token_login_reuses_the_qr_pin_as_account_pin(self):
+        auth = PronoteAuth()
+        data = {**self.BASE, "qr_code_pin": "1234"}
+
+        with patch(
+            "custom_components.pronote.api.auth.pronotepy.Client.token_login", return_value=self._client()
+        ) as token_login:
+            auth._auth_qrcode(data, "student")
+
+        assert token_login.call_args.kwargs["account_pin"] == "1234"
+        assert token_login.call_args.kwargs["device_name"] == DEFAULT_DEVICE_NAME
+
+    def test_an_explicit_account_pin_wins_over_the_qr_pin(self):
+        auth = PronoteAuth()
+        data = {**self.BASE, "qr_code_pin": "1234", "account_pin": "9876", "device_name": "Salon"}
+
+        with patch(
+            "custom_components.pronote.api.auth.pronotepy.Client.token_login", return_value=self._client()
+        ) as token_login:
+            auth._auth_qrcode(data, "student")
+
+        assert token_login.call_args.kwargs["account_pin"] == "9876"
+        assert token_login.call_args.kwargs["device_name"] == "Salon"
+
+    def test_no_pin_at_all_stays_none(self):
+        """An entry paired before this fix has no PIN left; don't send an empty one."""
+        auth = PronoteAuth()
+
+        with patch(
+            "custom_components.pronote.api.auth.pronotepy.Client.token_login", return_value=self._client()
+        ) as token_login:
+            auth._auth_qrcode(dict(self.BASE), "student")
+
+        assert token_login.call_args.kwargs["account_pin"] is None
+        assert token_login.call_args.kwargs["device_name"] == DEFAULT_DEVICE_NAME
+
+    def test_qrcode_login_skips_the_2fa_probe(self):
+        """pronotepy probes tab 49 after the login; schools that deny it broke the setup.
+
+        The probe answered "3 | Accès refusé" on a parent account whose login
+        had just succeeded, and the error surfaced as "Erreur d'authentification".
+        """
+        auth = PronoteAuth()
+        data = {
+            "qr_code_json": '{"url": "https://example.com"}',
+            "qr_code_pin": "1234",
+            "qr_code_uuid": "uuid123",
+        }
+
+        with patch(
+            "custom_components.pronote.api.auth.pronotepy.Client.qrcode_login", return_value=self._client()
+        ) as qrcode_login:
+            auth._auth_qrcode(data, "student")
+
+        assert qrcode_login.call_args.kwargs["skip_2fa"] is True
+
+    def test_qrcode_login_gets_the_pin_and_the_device_name(self):
+        auth = PronoteAuth()
+        data = {
+            "qr_code_json": '{"url": "https://example.com"}',
+            "qr_code_pin": "1234",
+            "qr_code_uuid": "uuid123",
+        }
+
+        with patch(
+            "custom_components.pronote.api.auth.pronotepy.Client.qrcode_login", return_value=self._client()
+        ) as qrcode_login:
+            auth._auth_qrcode(data, "student")
+
+        assert qrcode_login.call_args.kwargs["account_pin"] == "1234"
+        assert qrcode_login.call_args.kwargs["device_name"] == DEFAULT_DEVICE_NAME
+
+    def test_username_password_login_gets_a_device_name(self):
+        auth = PronoteAuth()
+        client = self._client()
+        data = {"url": "https://example.com/eleve.html", "username": "user", "password": "pass"}
+
+        with patch("custom_components.pronote.api.auth.pronotepy.Client", return_value=client) as client_class:
+            auth._auth_username_password(data, "student")
+
+        assert client_class.call_args.kwargs["device_name"] == DEFAULT_DEVICE_NAME
+
+
+class TestPronoteAuthRejectedLogin:
+    """pronotepy reports a refused login through `logged_in`, without raising.
+
+    A wrong PIN or a spent QR code therefore used to produce a half-built
+    client that only blew up later, on `client.info`, as "Unknown error".
+    """
+
+    @staticmethod
+    def _client(logged_in):
+        client = MagicMock()
+        client.logged_in = logged_in
+        client.export_credentials.return_value = {
+            "pronote_url": "https://example.com",
+            "username": "user",
+            "password": "token",
+            "uuid": "uuid123",
+        }
+        return client
+
+    def test_a_refused_qr_code_is_reported_as_such(self):
+        auth = PronoteAuth()
+        data = {"qr_code_json": '{"url": "x"}', "qr_code_pin": "0000", "qr_code_uuid": "uuid123"}
+
+        with patch(
+            "custom_components.pronote.api.auth.pronotepy.Client.qrcode_login",
+            return_value=self._client(False),
+        ):
+            with pytest.raises(QRCodeRejectedError) as err:
+                auth._auth_qrcode(data, "student")
+
+        assert "PIN" in str(err.value)
+
+    def test_a_refused_token_is_reported_as_such(self):
+        auth = PronoteAuth()
+        data = {
+            "qr_code_url": "https://example.com",
+            "qr_code_username": "user",
+            "qr_code_password": "stale",
+            "qr_code_uuid": "uuid123",
+        }
+
+        with patch(
+            "custom_components.pronote.api.auth.pronotepy.Client.token_login",
+            return_value=self._client(False),
+        ):
+            with pytest.raises(QRCodeRejectedError):
+                auth._auth_qrcode(data, "student")
+
+    def test_a_logged_in_client_goes_through(self):
+        auth = PronoteAuth()
+        data = {"qr_code_json": '{"url": "x"}', "qr_code_pin": "1234", "qr_code_uuid": "uuid123"}
+
+        with patch(
+            "custom_components.pronote.api.auth.pronotepy.Client.qrcode_login",
+            return_value=self._client(True),
+        ):
+            client, creds = auth._auth_qrcode(data, "student")
+
+        assert client.logged_in is True
+        assert creds.password == "token"
+
+
+class TestPronoteAuthSuspendedIP:
+    """Pronote bans the IP after too many login attempts.
+
+    Treated as an authentication failure, it asked for a new QR code, so the
+    user retried, so the ban lasted longer. It is temporary and retryable.
+    """
+
+    SUSPENDED = Exception("Your IP address is suspended.")
+
+    def test_a_banned_ip_is_not_a_credentials_problem(self):
+        auth = PronoteAuth()
+        data = {"qr_code_json": '{"url": "x"}', "qr_code_pin": "1234", "qr_code_uuid": "uuid123"}
+
+        with patch("custom_components.pronote.api.auth.pronotepy.Client.qrcode_login", side_effect=self.SUSPENDED):
+            with pytest.raises(IPSuspendedError) as err:
+                auth._auth_qrcode(data, "student")
+
+        assert not isinstance(err.value, AuthenticationError)
+        assert err.value.retry_after == 900
+
+    def test_a_banned_ip_is_seen_on_the_token_path_too(self):
+        auth = PronoteAuth()
+        data = {
+            "qr_code_url": "https://example.com",
+            "qr_code_username": "user",
+            "qr_code_password": "token",
+            "qr_code_uuid": "uuid123",
+        }
+
+        with patch("custom_components.pronote.api.auth.pronotepy.Client.token_login", side_effect=self.SUSPENDED):
+            with pytest.raises(IPSuspendedError):
+                auth._auth_qrcode(data, "student")
+
+    def test_a_banned_ip_is_seen_on_the_password_path_too(self):
+        auth = PronoteAuth()
+        data = {"url": "https://example.com/eleve.html", "username": "user", "password": "pass"}
+
+        with patch("custom_components.pronote.api.auth.pronotepy.Client", side_effect=self.SUSPENDED):
+            with pytest.raises(IPSuspendedError):
+                auth._auth_username_password(data, "student")
+
+    async def test_authenticate_keeps_the_precise_error_type(self):
+        """authenticate() used to re-wrap everything, hiding the subclass."""
+        auth = PronoteAuth()
+        data = {"qr_code_json": '{"url": "x"}', "qr_code_pin": "1234", "qr_code_uuid": "uuid123"}
+
+        with patch("custom_components.pronote.api.auth.pronotepy.Client.qrcode_login", side_effect=self.SUSPENDED):
+            with pytest.raises(IPSuspendedError):
+                await auth.authenticate("qrcode", data)
+
+        rejected = MagicMock()
+        rejected.logged_in = False
+        with patch("custom_components.pronote.api.auth.pronotepy.Client.qrcode_login", return_value=rejected):
+            with pytest.raises(QRCodeRejectedError):
+                await auth.authenticate("qrcode", data)
+
+
+class TestPronoteAuthQRCodeWins:
+    """A QR code the user just provided beats the stored token.
+
+    The stored token is often the dead one that sent them looking for a QR
+    code, and reusing it silently ignored the fresh QR code they had scanned.
+    """
+
+    BOTH = {
+        "qr_code_json": '{"url": "https://example.com"}',
+        "qr_code_pin": "1234",
+        "qr_code_uuid": "uuid123",
+        "qr_code_url": "https://example.com",
+        "qr_code_username": "user",
+        "qr_code_password": "stored-token",
+    }
+
+    @staticmethod
+    def _client():
+        client = MagicMock()
+        client.logged_in = True
+        client.export_credentials.return_value = {
+            "pronote_url": "https://example.com",
+            "username": "user",
+            "password": "fresh-token",
+            "uuid": "uuid123",
+        }
+        return client
+
+    def test_the_fresh_qr_code_is_used_first(self):
+        auth = PronoteAuth()
+
+        with (
+            patch(
+                "custom_components.pronote.api.auth.pronotepy.Client.qrcode_login", return_value=self._client()
+            ) as qrcode_login,
+            patch("custom_components.pronote.api.auth.pronotepy.Client.token_login") as token_login,
+        ):
+            _, creds = auth._auth_qrcode(dict(self.BOTH), "student")
+
+        qrcode_login.assert_called_once()
+        token_login.assert_not_called()
+        assert creds.password == "fresh-token"
+
+    def test_the_stored_token_still_serves_as_a_fallback(self):
+        auth = PronoteAuth()
+
+        with (
+            patch(
+                "custom_components.pronote.api.auth.pronotepy.Client.qrcode_login",
+                side_effect=Exception("QR expired"),
+            ),
+            patch(
+                "custom_components.pronote.api.auth.pronotepy.Client.token_login", return_value=self._client()
+            ) as token_login,
+        ):
+            client, _ = auth._auth_qrcode(dict(self.BOTH), "student")
+
+        token_login.assert_called_once()
+        assert client.logged_in is True
+
+    def test_a_malformed_qr_code_never_falls_back(self):
+        """Bad JSON is a typo to fix, not a reason to silently use the old token."""
+        auth = PronoteAuth()
+        data = {**self.BOTH, "qr_code_json": "not json"}
+
+        with patch("custom_components.pronote.api.auth.pronotepy.Client.token_login") as token_login:
+            with pytest.raises(InvalidResponseError):
+                auth._auth_qrcode(data, "student")
+
+        token_login.assert_not_called()
+
+
 class TestPronoteAuthQRCode:
     """Tests for _auth_qrcode method."""
 
@@ -1332,15 +1634,19 @@ class TestPronoteAuthQRCode:
 class TestPronoteAuthAdditionalCoverage:
     """Additional tests to reach 95% coverage for auth.py."""
 
-    async def test_authenticate_session_check_failure_continues(self):
-        """Test authenticate continues even if session_check fails."""
+    async def test_authenticate_does_not_check_a_session_it_just_opened(self):
+        """A session_check right after login cost a second login when it failed.
+
+        pronotepy answers a failing check with refresh(), which is a full
+        login, and Pronote counts logins for its brute-force protection — it
+        suspended the IP address after a handful of setup attempts.
+        """
         auth = PronoteAuth()
         mock_client = MagicMock()
-        mock_client.session_check.side_effect = Exception("Session check failed")
         mock_creds = MagicMock()
 
         with patch.object(auth, "_auth_username_password", return_value=(mock_client, mock_creds)):
-            client, creds = await auth.authenticate(
+            client, _ = await auth.authenticate(
                 "username_password",
                 {
                     "url": "https://example.com",
@@ -1350,7 +1656,7 @@ class TestPronoteAuthAdditionalCoverage:
             )
 
         assert client is mock_client
-        mock_client.session_check.assert_called_once()
+        mock_client.session_check.assert_not_called()
 
     def test_auth_username_password_with_ent(self):
         """Test _auth_username_password with ENT specified."""

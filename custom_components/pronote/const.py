@@ -32,6 +32,10 @@ DEFAULT_ALARM_OFFSET = 60
 DEFAULT_LUNCH_BREAK_TIME = "13:00"
 DEFAULT_SHOW_ALL_PERIODS = False
 
+# Device identifier sent to Pronote when it asks to re-register this client
+# during the mobile-app two-factor check. Pronote requires a non-empty name.
+DEFAULT_DEVICE_NAME = "Home Assistant"
+
 PLATFORMS = [Platform.SENSOR, Platform.CALENDAR]
 
 type PronoteConfigEntry = ConfigEntry[PronoteDataUpdateCoordinator]

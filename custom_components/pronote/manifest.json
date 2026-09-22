@@ -5,6 +5,10 @@
     "@foXaCe"
   ],
   "config_flow": true,
+  "dependencies": [
+    "file_upload",
+    "http"
+  ],
   "documentation": "https://github.com/foXaCe/hass-pronote",
   "integration_type": "service",
   "iot_class": "cloud_polling",

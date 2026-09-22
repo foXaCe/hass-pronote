@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 import importlib
+import json
 import logging
 import uuid
+from pathlib import Path
 from typing import Any
 
 # isort: off
@@ -13,10 +15,12 @@ import custom_components.pronote._compat  # noqa: F401  # Patch autoslot before 
 # isort: on
 import voluptuous as vol
 from homeassistant import config_entries
-from homeassistant.core import callback
+from homeassistant.core import HomeAssistant, callback
 from homeassistant.data_entry_flow import FlowResult
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.selector import (
+    FileSelector,
+    FileSelectorConfig,
     NumberSelector,
     NumberSelectorConfig,
     NumberSelectorMode,
@@ -26,6 +30,7 @@ from homeassistant.helpers.selector import (
 
 from .const import (
     DEFAULT_ALARM_OFFSET,
+    DEFAULT_DEVICE_NAME,
     DEFAULT_GRADES_TO_DISPLAY,
     DEFAULT_LUNCH_BREAK_TIME,
     DEFAULT_REFRESH_INTERVAL,
@@ -48,6 +53,20 @@ def _get_auth_error():
     from .api import AuthenticationError  # noqa: PLC0415
 
     return AuthenticationError
+
+
+def _get_qr_rejected_error():
+    """Import QRCodeRejectedError lazily."""
+    from .api import QRCodeRejectedError  # noqa: PLC0415
+
+    return QRCodeRejectedError
+
+
+def _get_ip_suspended_error():
+    """Import IPSuspendedError lazily."""
+    from .api import IPSuspendedError  # noqa: PLC0415
+
+    return IPSuspendedError
 
 
 def get_ent_list() -> list[str]:
@@ -83,29 +102,123 @@ def _step_user_schema_up() -> vol.Schema:
     )
 
 
-QR_FIELDS = {
-    vol.Required("qr_code_json"): str,
-    vol.Required("qr_code_pin"): str,
-}
+# Static page that decodes the QR Code in the browser. Python decoders are a
+# dead end on Home Assistant OS: zxing-cpp ships no musl wheel and pyzbar needs
+# the system libzbar, so the reading happens client-side and only the resulting
+# JSON is pasted back into the form.
+QR_READER_URL = "/pronote-qr-reader"
+QR_READER_PAGE = f"{QR_READER_URL}/index.html"
+_QR_READER_REGISTERED = f"{DOMAIN}_qr_reader_registered"
 
-STEP_USER_DATA_SCHEMA_QR = vol.Schema(
-    {
-        vol.Required("account_type"): ACCOUNT_TYPE_SELECTOR,
-        **QR_FIELDS,
-    }
-)
 
-REAUTH_QR_SCHEMA = vol.Schema(QR_FIELDS)
+async def _async_qr_reader_url(hass: HomeAssistant) -> str:
+    """Serve the QR reader page once per Home Assistant run, and return its path."""
+    if not hass.data.get(_QR_READER_REGISTERED):
+        try:
+            from homeassistant.components.http import StaticPathConfig  # noqa: PLC0415
+
+            await hass.http.async_register_static_paths(
+                [StaticPathConfig(QR_READER_URL, str(Path(__file__).parent / "qr_reader"), False)]
+            )
+        except Exception as err:  # noqa: BLE001  # a missing page must never block the form
+            _LOGGER.warning("Could not serve the Pronote QR reader page: %s", err)
+        hass.data[_QR_READER_REGISTERED] = True
+    return QR_READER_PAGE
+
+
+# Upper bounds for an uploaded picture, to keep the decoder cheap.
+MAX_QR_IMAGE_BYTES = 12 * 1024 * 1024
+MAX_QR_IMAGE_PIXELS = 24_000_000
+
+_UNSET = object()
+_qr_decoder: Any = _UNSET
+
+
+def _load_qr_decoder() -> tuple[Any, Any] | None:
+    """Return (pyzbar, PIL.Image) when a local QR decoder is usable, else None.
+
+    Neither pyzbar nor Pillow is declared in the manifest: shipping a decoder as
+    a hard requirement broke the whole config flow once (zxing-cpp has no wheel
+    on Home Assistant OS/Container). The photo field is therefore a bonus that
+    only shows up when both libraries happen to be importable, and pyzbar also
+    needs the system libzbar, which it reports as ImportError/OSError.
+    """
+    try:
+        from PIL import Image  # noqa: PLC0415
+        from pyzbar import pyzbar  # noqa: PLC0415
+    except (ImportError, OSError) as err:
+        _LOGGER.debug("QR image decoder unavailable, falling back to JSON only: %s", err)
+        return None
+    return pyzbar, Image
+
+
+async def _async_qr_decoder(hass: HomeAssistant) -> tuple[Any, Any] | None:
+    """Return the cached QR decoder, importing it off the event loop."""
+    global _qr_decoder  # noqa: PLW0603
+    if _qr_decoder is _UNSET:
+        _qr_decoder = await hass.async_add_import_executor_job(_load_qr_decoder)
+    return _qr_decoder
+
+
+def _decode_qr_image(hass: HomeAssistant, file_id: str, decoder: tuple[Any, Any]) -> str:
+    """Decode an uploaded picture and return its Pronote QR payload as JSON text."""
+    pyzbar, image_module = decoder
+
+    from homeassistant.components.file_upload import process_uploaded_file  # noqa: PLC0415
+
+    with process_uploaded_file(hass, file_id) as path:
+        if path.stat().st_size > MAX_QR_IMAGE_BYTES:
+            raise ValueError("QR image too large")
+        with image_module.open(path) as image:
+            if image.width * image.height > MAX_QR_IMAGE_PIXELS:
+                raise ValueError("QR image too large")
+            codes = [code for code in pyzbar.decode(image.convert("RGB")) if code.type == "QRCODE"]
+
+    if len(codes) != 1:
+        raise ValueError("Expected exactly one QR code")
+
+    text = codes[0].data.decode("utf-8")
+    payload = json.loads(text)
+    if not isinstance(payload, dict) or not all(
+        isinstance(payload.get(key), str) and payload[key] for key in ("url", "login", "jeton")
+    ):
+        raise ValueError("Not a Pronote QR code")
+    return text
+
+
+def _qr_fields(*, with_image: bool, with_json: bool) -> dict:
+    """Build the QR fields: a photo and a PIN, and that is all it takes.
+
+    The JSON field is the fallback, not the default. It only shows up when no
+    decoder is installed, or once a picture has failed to decode — asking for
+    both at once made the form look like it needed both.
+
+    account_pin and device_name are not asked either: the QR PIN doubles as the
+    account PIN and the device name has a sane default. Both stay editable in
+    the options for the rare account where they differ.
+    """
+    fields: dict = {}
+    if with_image:
+        fields[vol.Optional("qr_code_image")] = FileSelector(FileSelectorConfig(accept="image/*"))
+        if with_json:
+            fields[vol.Optional("qr_code_json")] = str
+    else:
+        fields[vol.Required("qr_code_json")] = str
+    fields[vol.Required("qr_code_pin")] = str
+    return fields
 
 
 class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     """Handle a config flow for Pronote."""
 
-    VERSION = 2
+    VERSION = 3
     pronote_client = None
 
     def __init__(self) -> None:
         self._user_inputs: dict = {}
+        # Raised once a picture could not be turned into a QR payload, so the
+        # user gets the JSON fallback instead of a dead end.
+        self._show_json_field = False
         # Built lazily off the event loop: creating it imports pronotepy, whose
         # first import does blocking file I/O (ctypes looking up libgmp).
         self._api_client = None
@@ -132,7 +245,7 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
     async def async_step_username_password_login(self, user_input: dict | None = None) -> FlowResult:
         """Handle username/password login step."""
-        _LOGGER.info("async_step_up: Connecting via user/password")
+        _LOGGER.debug("Connexion par identifiant et mot de passe")
         errors: dict[str, str] = {}
         await self._async_ensure_api_client()
         if user_input is not None:
@@ -147,6 +260,9 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
                 if client is None:
                     raise InvalidAuth
+            except _get_ip_suspended_error() as err:
+                _LOGGER.error("Pronote suspended this IP address: %s", err)
+                errors["base"] = "ip_suspended"
             except _get_auth_error():
                 errors["base"] = "invalid_auth"
             except InvalidAuth:
@@ -169,14 +285,44 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             errors=errors,
         )
 
+    async def _async_qr_schema(self, *, with_account_type: bool) -> vol.Schema:
+        """Build the QR schema, probing the optional decoder off the event loop."""
+        fields = _qr_fields(
+            with_image=(await _async_qr_decoder(self.hass)) is not None,
+            with_json=self._show_json_field,
+        )
+        if with_account_type:
+            return vol.Schema({vol.Required("account_type"): ACCOUNT_TYPE_SELECTOR, **fields})
+        return vol.Schema(fields)
+
     async def _async_prepare_qr_input(self, user_input: dict) -> dict[str, str]:
+        """Turn an uploaded photo into JSON, and refuse an empty QR payload.
+
+        Every failure here reveals the JSON field, so a picture Home Assistant
+        cannot read never leaves the user stuck on a form they cannot fill.
+        """
+        image_id = user_input.pop("qr_code_image", None)
+        if image_id:
+            decoder = await _async_qr_decoder(self.hass)
+            if decoder is None:
+                self._show_json_field = True
+                return {"qr_code_image": "qr_decoder_missing"}
+            try:
+                user_input["qr_code_json"] = await self.hass.async_add_executor_job(
+                    _decode_qr_image, self.hass, image_id, decoder
+                )
+            except Exception as err:
+                _LOGGER.debug("Could not decode the QR picture: %s - %s", type(err).__name__, err)
+                self._show_json_field = True
+                return {"qr_code_image": "invalid_qr_image"}
         if not user_input.get("qr_code_json", "").strip():
+            self._show_json_field = True
             return {"base": "qr_code_required"}
         return {}
 
     async def async_step_qr_code_login(self, user_input: dict | None = None) -> FlowResult:
         """Handle QR code login step."""
-        _LOGGER.info("async_step_up: Connecting via qrcode")
+        _LOGGER.debug("Connexion par QR code")
         errors: dict[str, str] = {}
         if user_input is not None:
             user_input = dict(user_input)
@@ -196,6 +342,15 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
                 if client is None:
                     raise InvalidAuth
+            except _get_ip_suspended_error() as err:
+                # Retrying here is what makes the ban last; say so and stop.
+                _LOGGER.error("Pronote suspended this IP address: %s", err)
+                errors["base"] = "ip_suspended"
+            except _get_qr_rejected_error() as err:
+                # A wrong PIN or a spent QR code: say so, instead of a blanket
+                # "authentication error" that sends people hunting elsewhere.
+                _LOGGER.error("QR code rejected by Pronote: %s", err)
+                errors["base"] = "qr_code_rejected"
             except _get_auth_error() as err:
                 _LOGGER.error("AuthenticationError during QR auth: %s", err)
                 errors["base"] = "invalid_auth"
@@ -221,8 +376,9 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
         return self.async_show_form(
             step_id="qr_code_login",
-            data_schema=STEP_USER_DATA_SCHEMA_QR,
+            data_schema=await self._async_qr_schema(with_account_type=True),
             errors=errors,
+            description_placeholders={"qr_reader_url": await _async_qr_reader_url(self.hass)},
         )
 
     async def async_step_parent(self, user_input=None) -> FlowResult:
@@ -314,6 +470,12 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     creds = self._api_client._credentials
                     if client is None:
                         raise InvalidAuth
+                except _get_ip_suspended_error() as err:
+                    _LOGGER.error("Pronote suspended this IP address: %s", err)
+                    errors["base"] = "ip_suspended"
+                except _get_qr_rejected_error() as err:
+                    _LOGGER.error("QR code rejected by Pronote: %s", err)
+                    errors["base"] = "qr_code_rejected"
                 except (_get_auth_error(), InvalidAuth):
                     errors["base"] = "invalid_auth"
                 except Exception:
@@ -349,7 +511,7 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
         connection_type = self._user_inputs.get("connection_type", "username_password")
         if connection_type == "qrcode":
-            schema = REAUTH_QR_SCHEMA
+            schema = await self._async_qr_schema(with_account_type=False)
         else:
             schema = vol.Schema(
                 {
@@ -361,6 +523,7 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             step_id="reauth_confirm",
             data_schema=schema,
             errors=errors,
+            description_placeholders={"qr_reader_url": await _async_qr_reader_url(self.hass)},
         )
 
     @staticmethod
@@ -424,6 +587,19 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                         "show_all_periods",
                         default=config_entry.options.get("show_all_periods", DEFAULT_SHOW_ALL_PERIODS),
                     ): bool,
+                    # Kept out of the setup form: Pronote asks for these only
+                    # when it re-runs its two-factor check, and the defaults
+                    # are right for nearly every account.
+                    vol.Optional(
+                        "device_name",
+                        default=config_entry.options.get(
+                            "device_name", config_entry.data.get("device_name", DEFAULT_DEVICE_NAME)
+                        ),
+                    ): str,
+                    vol.Optional(
+                        "account_pin",
+                        default=config_entry.options.get("account_pin", ""),
+                    ): str,
                 }
             ),
         )
