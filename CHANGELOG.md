@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.3.1](https://github.com/foXaCe/hass-pronote/compare/v1.3.0...v1.3.1) (2026-09-22)
+
+
+### Bug Fixes
+
+* **config_flow:** stop using async_update_reload_and_abort on reauth ([#61](https://github.com/foXaCe/hass-pronote/issues/61)) ([f169d32](https://github.com/foXaCe/hass-pronote/commit/f169d3272f122742b8c9c4095189008b3dc5bbf8))
+
 ## [1.3.0](https://github.com/foXaCe/hass-pronote/compare/v1.2.1...v1.3.0) (2026-09-22)
 
 
