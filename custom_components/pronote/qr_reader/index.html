@@ -1,0 +1,433 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex, nofollow">
+<link rel="icon" href="data:,">
+<title>Lecteur de QR Code Pronote</title>
+<style>
+  :root {
+    color-scheme: light dark;
+    --bg: #f5f6f8;
+    --card: #ffffff;
+    --fg: #1c1e21;
+    --muted: #5c6470;
+    --line: #dcdfe4;
+    --accent: #0b6bcb;
+    --accent-fg: #ffffff;
+    --ok-bg: #e7f5ec;
+    --ok-fg: #14653a;
+    --err-bg: #fdeaea;
+    --err-fg: #a11c1c;
+    --code-bg: #f1f2f4;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #111315;
+      --card: #1b1e21;
+      --fg: #e6e8ea;
+      --muted: #9aa3ad;
+      --line: #2e3338;
+      --accent: #5aa9f8;
+      --accent-fg: #0b1b2b;
+      --ok-bg: #16301f;
+      --ok-fg: #8fdcae;
+      --err-bg: #331a1a;
+      --err-fg: #f3a3a3;
+      --code-bg: #101214;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    padding: 24px 16px 48px;
+    background: var(--bg);
+    color: var(--fg);
+    font: 16px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+  main { max-width: 640px; margin: 0 auto; }
+  h1 { font-size: 1.45rem; margin: 0 0 4px; }
+  .lead { color: var(--muted); margin: 0 0 24px; }
+  .card {
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    padding: 20px;
+    margin-bottom: 16px;
+  }
+  .row { display: flex; flex-wrap: wrap; gap: 12px; }
+  button {
+    flex: 1 1 180px;
+    min-height: 48px;
+    padding: 12px 18px;
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    background: var(--card);
+    color: var(--fg);
+    font: inherit;
+    font-weight: 600;
+    cursor: pointer;
+  }
+  button.primary { background: var(--accent); color: var(--accent-fg); border-color: transparent; }
+  button:disabled { opacity: .5; cursor: not-allowed; }
+  button:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+  input[type=file] { display: none; }
+  #video { width: 100%; border-radius: 10px; background: #000; display: block; }
+  #camera { display: none; margin-top: 16px; }
+  #camera.on { display: block; }
+  #status { margin-top: 16px; padding: 12px 14px; border-radius: 10px; display: none; }
+  #status.on { display: block; }
+  #status.ok { background: var(--ok-bg); color: var(--ok-fg); }
+  #status.err { background: var(--err-bg); color: var(--err-fg); }
+  #result { display: none; }
+  #result.on { display: block; }
+  code, pre {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: .85rem;
+  }
+  pre {
+    background: var(--code-bg);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 14px;
+    margin: 0 0 12px;
+    overflow-x: auto;
+    white-space: pre-wrap;
+    word-break: break-all;
+    max-height: 40vh;
+  }
+  h2 { font-size: 1.05rem; margin: 0 0 12px; }
+  ol { margin: 0; padding-left: 20px; color: var(--muted); }
+  li { margin-bottom: 6px; }
+  .note { color: var(--muted); font-size: .875rem; margin: 12px 0 0; }
+</style>
+</head>
+<body>
+<main>
+  <h1 data-i18n="title">Lecteur de QR Code Pronote</h1>
+  <p class="lead" data-i18n="lead">
+    Le QR Code est lu directement par ce navigateur. Aucune image n'est envoyée sur le réseau.
+  </p>
+
+  <div class="card">
+    <div class="row">
+      <button id="pick" class="primary" data-i18n="pick">Choisir une photo</button>
+      <button id="scan" hidden data-i18n="scan">Scanner avec la caméra</button>
+    </div>
+    <input type="file" id="file" accept="image/*">
+
+    <div id="camera">
+      <video id="video" playsinline muted></video>
+      <p class="note" data-i18n="aim">Cadrez le QR Code affiché par Pronote.</p>
+    </div>
+
+    <div id="status"></div>
+  </div>
+
+  <div class="card" id="result">
+    <h2 data-i18n="found">JSON du QR Code</h2>
+    <pre id="json"></pre>
+    <div class="row">
+      <button id="copy" class="primary" data-i18n="copy">Copier</button>
+    </div>
+    <p class="note" data-i18n="paste">
+      Collez ce texte dans le champ « JSON du QR Code » du formulaire Pronote, puis saisissez le PIN
+      choisi lors de la génération du QR Code.
+    </p>
+  </div>
+
+  <div class="card">
+    <h2 data-i18n="howto">Obtenir le QR Code</h2>
+    <ol>
+      <li data-i18n="step1">Ouvrez Pronote dans un navigateur, sur un ordinateur.</li>
+      <li data-i18n="step2">Menu du compte, puis « Configurer l'accès mobile » ou « QR Code ».</li>
+      <li data-i18n="step3">Choisissez un code PIN à quatre chiffres et retenez-le.</li>
+      <li data-i18n="step4">Photographiez l'écran, ou faites une capture, puis revenez ici.</li>
+    </ol>
+    <p class="note" data-i18n="ttl">Le QR Code n'est valable que dix minutes.</p>
+  </div>
+</main>
+
+<script>
+(() => {
+  "use strict";
+
+  const STRINGS = {
+    en: {
+      title: "Pronote QR Code reader",
+      lead: "The QR Code is read by this browser only. No picture leaves your device.",
+      pick: "Choose a picture",
+      scan: "Scan with the camera",
+      aim: "Point the camera at the QR Code shown by Pronote.",
+      found: "QR Code JSON",
+      copy: "Copy",
+      copied: "Copied.",
+      paste: "Paste this text into the “QR Code JSON” field of the Pronote form, then enter the PIN you chose when generating the QR Code.",
+      howto: "Getting the QR Code",
+      step1: "Open Pronote in a browser, on a computer.",
+      step2: "Account menu, then “Set up mobile access” or “QR Code”.",
+      step3: "Pick a four-digit PIN and remember it.",
+      step4: "Photograph the screen, or take a screenshot, then come back here.",
+      ttl: "A QR Code is only valid for ten minutes.",
+      reading: "Reading…",
+      noQr: "No QR Code found in this picture. Try a sharper, closer shot.",
+      notPronote: "This is a QR Code, but not a Pronote one.",
+      noDecoder: "This browser cannot decode QR Codes.",
+      cameraFailed: "Camera unavailable. Use “Choose a picture” instead.",
+      cameraInsecure: "The camera needs an HTTPS connection. Use “Choose a picture” instead.",
+      stop: "Stop the camera",
+    },
+    fr: {
+      copied: "Copié.",
+      reading: "Lecture…",
+      noQr: "Aucun QR Code trouvé sur cette image. Réessayez avec une photo plus nette ou plus proche.",
+      notPronote: "C'est bien un QR Code, mais il ne vient pas de Pronote.",
+      noDecoder: "Ce navigateur ne sait pas décoder les QR Codes.",
+      cameraFailed: "Caméra indisponible. Utilisez plutôt « Choisir une photo ».",
+      cameraInsecure: "La caméra exige une connexion HTTPS. Utilisez plutôt « Choisir une photo ».",
+      stop: "Arrêter la caméra",
+    },
+  };
+
+  // The markup is written in French; only translate away from it.
+  const lang = (navigator.language || "fr").toLowerCase().startsWith("fr") ? "fr" : "en";
+  const t = (key) => (STRINGS[lang] && STRINGS[lang][key]) || STRINGS.en[key] || key;
+
+  if (lang === "en") {
+    document.documentElement.lang = "en";
+    for (const node of document.querySelectorAll("[data-i18n]")) {
+      const value = STRINGS.en[node.dataset.i18n];
+      if (value) node.textContent = value;
+    }
+  }
+
+  const els = {
+    pick: document.getElementById("pick"),
+    scan: document.getElementById("scan"),
+    file: document.getElementById("file"),
+    camera: document.getElementById("camera"),
+    video: document.getElementById("video"),
+    status: document.getElementById("status"),
+    result: document.getElementById("result"),
+    json: document.getElementById("json"),
+    copy: document.getElementById("copy"),
+  };
+
+  const SCAN_LABEL = els.scan.textContent;
+
+  let stream = null;
+  let scanning = false;
+  let jsQRPromise = null;
+
+  const hideResult = () => {
+    els.result.classList.remove("on");
+    els.json.textContent = "";
+  };
+
+  const say = (message, kind) => {
+    els.status.textContent = message;
+    els.status.className = "on " + (kind || "");
+  };
+  const clearStatus = () => {
+    els.status.className = "";
+    els.status.textContent = "";
+  };
+
+
+  /** jsQR is 250 kB, so it is only fetched when the native detector is missing. */
+  const loadJsQR = () => {
+    if (!jsQRPromise) {
+      jsQRPromise = new Promise((resolve, reject) => {
+        const script = document.createElement("script");
+        script.src = "jsQR.js";
+        script.onload = () => resolve(window.jsQR);
+        script.onerror = () => reject(new Error("jsQR.js failed to load"));
+        document.head.appendChild(script);
+      });
+    }
+    return jsQRPromise;
+  };
+
+  let nativeDetector;
+  const getNativeDetector = async () => {
+    if (nativeDetector !== undefined) return nativeDetector;
+    nativeDetector = null;
+    if ("BarcodeDetector" in window) {
+      try {
+        const formats = await window.BarcodeDetector.getSupportedFormats();
+        if (formats.includes("qr_code")) {
+          nativeDetector = new window.BarcodeDetector({ formats: ["qr_code"] });
+        }
+      } catch (err) {
+        nativeDetector = null;
+      }
+    }
+    return nativeDetector;
+  };
+
+  /** Returns the decoded text, or null when no QR Code is visible. */
+  const decodeCanvas = async (canvas, source) => {
+    const detector = await getNativeDetector();
+    if (detector) {
+      try {
+        const codes = await detector.detect(source || canvas);
+        if (codes.length) return codes[0].rawValue;
+      } catch (err) {
+        // A detector that throws on this frame: fall through to jsQR.
+      }
+    }
+    const jsQR = await loadJsQR();
+    if (!jsQR) return null;
+    const ctx = canvas.getContext("2d", { willReadFrequently: true });
+    const pixels = ctx.getImageData(0, 0, canvas.width, canvas.height);
+    const code = jsQR(pixels.data, pixels.width, pixels.height, { inversionAttempts: "attemptBoth" });
+    return code ? code.data : null;
+  };
+
+  /** Pronote QR payloads always carry these three keys. */
+  const asPronotePayload = (text) => {
+    let parsed;
+    try {
+      parsed = JSON.parse(text);
+    } catch (err) {
+      return null;
+    }
+    if (!parsed || typeof parsed !== "object") return null;
+    for (const key of ["url", "login", "jeton"]) {
+      if (typeof parsed[key] !== "string" || !parsed[key]) return null;
+    }
+    return JSON.stringify(parsed);
+  };
+
+  const show = (text) => {
+    const payload = asPronotePayload(text);
+    if (!payload) {
+      hideResult();
+      say(t("notPronote"), "err");
+      return false;
+    }
+    els.json.textContent = payload;
+    els.result.classList.add("on");
+    clearStatus();
+    els.result.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    return true;
+  };
+
+  // --- picture ---------------------------------------------------------
+
+  els.pick.addEventListener("click", () => els.file.click());
+
+  els.file.addEventListener("change", async () => {
+    const file = els.file.files && els.file.files[0];
+    els.file.value = "";
+    if (!file) return;
+    hideResult();
+    say(t("reading"));
+    try {
+      const bitmap = await createImageBitmap(file);
+      // Large photos decode poorly and slowly; 1600 px is plenty for a QR Code.
+      const scale = Math.min(1, 1600 / Math.max(bitmap.width, bitmap.height));
+      const canvas = document.createElement("canvas");
+      canvas.width = Math.round(bitmap.width * scale);
+      canvas.height = Math.round(bitmap.height * scale);
+      canvas.getContext("2d").drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+      const text = await decodeCanvas(canvas, bitmap);
+      bitmap.close();
+      if (text === null) {
+        say(t("noQr"), "err");
+        return;
+      }
+      show(text);
+    } catch (err) {
+      say(t("noDecoder") + " (" + err.message + ")", "err");
+    }
+  });
+
+  // --- camera ----------------------------------------------------------
+
+  const stopCamera = () => {
+    scanning = false;
+    if (stream) {
+      for (const track of stream.getTracks()) track.stop();
+      stream = null;
+    }
+    els.camera.classList.remove("on");
+    els.scan.textContent = SCAN_LABEL;
+  };
+
+  const tick = async (canvas) => {
+    if (!scanning) return;
+    const video = els.video;
+    if (video.readyState === video.HAVE_ENOUGH_DATA) {
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+      canvas.getContext("2d", { willReadFrequently: true }).drawImage(video, 0, 0);
+      let text = null;
+      try {
+        text = await decodeCanvas(canvas, video);
+      } catch (err) {
+        text = null;
+      }
+      if (text !== null && show(text)) {
+        stopCamera();
+        return;
+      }
+    }
+    requestAnimationFrame(() => tick(canvas));
+  };
+
+  if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+    els.scan.hidden = false;
+    els.scan.addEventListener("click", async () => {
+      if (scanning) {
+        stopCamera();
+        clearStatus();
+        return;
+      }
+      if (!window.isSecureContext) {
+        say(t("cameraInsecure"), "err");
+        return;
+      }
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: "environment" },
+          audio: false,
+        });
+      } catch (err) {
+        say(t("cameraFailed"), "err");
+        return;
+      }
+      clearStatus();
+      els.video.srcObject = stream;
+      await els.video.play();
+      els.camera.classList.add("on");
+      els.scan.textContent = t("stop");
+      scanning = true;
+      tick(document.createElement("canvas"));
+    });
+  }
+
+  window.addEventListener("pagehide", stopCamera);
+
+  // --- copy ------------------------------------------------------------
+
+  els.copy.addEventListener("click", async () => {
+    const text = els.json.textContent;
+    try {
+      await navigator.clipboard.writeText(text);
+    } catch (err) {
+      // Clipboard API needs a secure context; select the text instead.
+      const range = document.createRange();
+      range.selectNodeContents(els.json);
+      const selection = window.getSelection();
+      selection.removeAllRanges();
+      selection.addRange(range);
+      return;
+    }
+    say(t("copied"), "ok");
+  });
+})();
+</script>
+</body>
+</html>

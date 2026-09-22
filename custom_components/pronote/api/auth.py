@@ -12,7 +12,14 @@ from typing import TYPE_CHECKING, Any
 import pronotepy
 from pronotepy import CryptoError, ENTLoginError, QRCodeDecryptError
 
-from .exceptions import AuthenticationError, ConnectionError, InvalidResponseError
+from ..const import DEFAULT_DEVICE_NAME
+from .exceptions import (
+    AuthenticationError,
+    ConnectionError,
+    InvalidResponseError,
+    IPSuspendedError,
+    QRCodeRejectedError,
+)
 from .models import Credentials
 
 if TYPE_CHECKING:
@@ -23,6 +30,48 @@ _LOGGER = logging.getLogger(__name__)
 # Timeouts pour les opérations d'auth
 AUTH_TIMEOUT = 30
 CONNECT_TIMEOUT = 10
+
+
+def _account_pin(data: dict[str, Any]) -> str | None:
+    """PIN à présenter quand Pronote redemande la double authentification.
+
+    Pronote peut exiger une nouvelle validation de l'appareil plusieurs jours
+    après l'appairage. Sans PIN, pronotepy lève MFAError et le jeton devient
+    inutilisable. Le PIN du QR code est le même que celui de l'espace mobile,
+    on s'en sert donc par défaut.
+    """
+    return data.get("account_pin") or data.get("qr_code_pin") or None
+
+
+def _raise_if_ip_suspended(err: Exception) -> None:
+    """Turn Pronote's IP ban into a retryable error, not a credentials problem.
+
+    pronotepy raises a plain PronoteAPIError("Your IP address is suspended.")
+    from the login page. Wrapped as an authentication failure, it asked the
+    user for a new QR code, so they retried, so the ban lasted longer.
+    """
+    if "ip address is suspended" in str(err).lower():
+        raise IPSuspendedError(
+            "Pronote a suspendu cette adresse IP après trop de tentatives de connexion. Attendez avant de réessayer."
+        ) from err
+
+
+def _check_logged_in(client: Any, message: str) -> None:
+    """Refuse a client pronotepy built but never logged in.
+
+    ``Client.__init__`` stores the outcome in ``logged_in`` instead of raising,
+    so a wrong PIN or a spent QR code used to travel on as a working client and
+    blow up later on ``client.info``, as an unrelated "Unknown error".
+    """
+    if getattr(client, "logged_in", True):
+        return
+    _LOGGER.debug("Pronote a rejeté la connexion: %s", message)
+    raise QRCodeRejectedError(message)
+
+
+def _device_name(data: dict[str, Any]) -> str:
+    """Nom d'appareil envoyé lors d'un ré-enregistrement demandé par Pronote."""
+    return data.get("device_name") or DEFAULT_DEVICE_NAME
 
 
 class PronoteAuth:
@@ -66,7 +115,12 @@ class PronoteAuth:
             raise ConnectionError(f"Erreur réseau: {err}") from err
         except builtins.ConnectionError as err:
             raise ConnectionError(f"Erreur réseau: {err}") from err
+        except (AuthenticationError, IPSuspendedError):
+            # Already typed by the login helpers; re-wrapping would hide the
+            # subclass the config flow uses to pick its error message.
+            raise
         except Exception as err:
+            _raise_if_ip_suspended(err)
             # Log avec plus de détails pour debug (sans exposer de secrets)
             _LOGGER.error("Échec authentification Pronote: %s - %s", type(err).__name__, str(err))
             raise AuthenticationError(f"Authentification impossible: {err}") from err
@@ -74,13 +128,10 @@ class PronoteAuth:
         if client is None:
             raise AuthenticationError("Client Pronote non créé")
 
-        # Vérification de session - aussi dans un thread
-        try:
-            await asyncio.to_thread(client.session_check)
-        except Exception as err:
-            _LOGGER.warning("Session check a échoué: %s", type(err).__name__)
-            # On continue quand même, pronotepy peut auto-réparer
-
+        # No session_check here on purpose: the session was just opened, and a
+        # failing check makes pronotepy run refresh(), i.e. a second full
+        # login. Pronote counts logins for its brute-force protection and
+        # suspends the IP address, so the free check was not free at all.
         return client, creds
 
     def _auth_username_password(
@@ -101,12 +152,13 @@ class PronoteAuth:
                 pronote_url=url,
                 username=data["username"],
                 password=data["password"],
-                account_pin=data.get("account_pin"),
-                device_name=data.get("device_name"),
+                account_pin=_account_pin(data),
+                device_name=_device_name(data),
                 client_identifier=data.get("client_identifier"),
                 ent=ent,
             )
         except Exception as err:
+            _raise_if_ip_suspended(err)
             raise AuthenticationError(f"Login échoué: {err}") from err
 
         # Nettoyage sécurisé
@@ -138,78 +190,122 @@ class PronoteAuth:
         data: dict[str, Any],
         account_type: str,
     ) -> tuple[pronotepy.Client | pronotepy.ParentClient, Credentials]:
-        """Authentification par QR code ou token."""
+        """Authentification par QR code ou par jeton enregistré.
+
+        A fresh QR code wins over the stored token: providing one is how the
+        user asks to start over, and the token may well be the dead one that
+        sent them looking for a QR code in the first place. The other way round
+        then serves as the fallback.
+        """
         client_class = pronotepy.ParentClient if account_type == "parent" else pronotepy.Client
+        has_qr = bool(data.get("qr_code_json"))
+        has_token = bool(data.get("qr_code_url")) and bool(data.get("qr_code_username"))
 
-        # Préférence: token_login si credentials déjà sauvegardés
-        if "qr_code_url" in data and "qr_code_username" in data:
-            _LOGGER.debug("Utilisation token_login pour: %s", data["qr_code_username"])
+        if has_qr:
             try:
-                client = client_class.token_login(
-                    pronote_url=data["qr_code_url"],
-                    username=data["qr_code_username"],
-                    password=data["qr_code_password"],
-                    uuid=data.get("qr_code_uuid"),
-                    account_pin=data.get("account_pin"),
-                    device_name=data.get("device_name"),
-                    client_identifier=data.get("client_identifier"),
-                )
+                return self._login_with_qrcode(client_class, data)
+            except AuthenticationError:
+                if not has_token:
+                    raise
+                _LOGGER.debug("QR code refusé, essai avec le jeton enregistré")
 
-                exported = client.export_credentials()
-                _LOGGER.debug("Pronote token_login succeeded, new credentials exported")
-                credentials = Credentials(
-                    pronote_url=exported.get("pronote_url", data["qr_code_url"]),
-                    username=exported.get("username", data["qr_code_username"]),
-                    password=exported.get("password", data.get("qr_code_password", "")),
-                    uuid=exported.get("uuid", data.get("qr_code_uuid")),
-                    client_identifier=exported.get("client_identifier", data.get("client_identifier")),
-                )
-                return client, credentials
-            except Exception as err:
-                _LOGGER.warning("Token login échoué: %s - %s", type(err).__name__, err)
-                if "qr_code_json" not in data:
-                    # No fresh QR code available — can't fall back
-                    raise AuthenticationError(
-                        f"Token expiré, veuillez reconfigurer l'intégration avec un nouveau QR code: {err}"
-                    ) from err
-                # Fresh QR code provided (reauth flow) — fall through to qrcode_login
-                _LOGGER.info("Fallback vers qrcode_login avec nouveau QR code")
-
-        # Login avec QR code (initial setup or reauth with fresh QR)
-        if "qr_code_json" not in data:
+        if not has_token:
             _LOGGER.error("Aucun QR code JSON dans les données: %s", list(data.keys()))
             raise AuthenticationError("Aucun QR code ou token sauvegardé")
 
+        return self._login_with_token(client_class, data)
+
+    def _login_with_token(
+        self,
+        client_class: type,
+        data: dict[str, Any],
+    ) -> tuple[pronotepy.Client | pronotepy.ParentClient, Credentials]:
+        """Reconnexion avec le jeton renvoyé par la connexion précédente."""
+        _LOGGER.debug("Utilisation token_login pour: %s", data["qr_code_username"])
+        try:
+            client = client_class.token_login(
+                pronote_url=data["qr_code_url"],
+                username=data["qr_code_username"],
+                password=data["qr_code_password"],
+                uuid=data.get("qr_code_uuid"),
+                account_pin=_account_pin(data),
+                device_name=_device_name(data),
+                client_identifier=data.get("client_identifier"),
+            )
+            _check_logged_in(client, "Jeton Pronote refusé, il faut un nouveau QR code")
+        except AuthenticationError:
+            raise
+        except Exception as err:
+            _raise_if_ip_suspended(err)
+            _LOGGER.debug("Token login échoué: %s - %s", type(err).__name__, err)
+            raise AuthenticationError(
+                f"Token expiré, veuillez reconfigurer l'intégration avec un nouveau QR code: {err}"
+            ) from err
+
+        exported = client.export_credentials()
+        _LOGGER.debug("Pronote token_login succeeded, new credentials exported")
+        credentials = Credentials(
+            pronote_url=exported.get("pronote_url", data["qr_code_url"]),
+            username=exported.get("username", data["qr_code_username"]),
+            password=exported.get("password", data.get("qr_code_password", "")),
+            uuid=exported.get("uuid", data.get("qr_code_uuid")),
+            client_identifier=exported.get("client_identifier", data.get("client_identifier")),
+        )
+        return client, credentials
+
+    def _login_with_qrcode(
+        self,
+        client_class: type,
+        data: dict[str, Any],
+    ) -> tuple[pronotepy.Client | pronotepy.ParentClient, Credentials]:
+        """Première connexion, à partir du QR code affiché par Pronote."""
         _LOGGER.debug("Utilisation qrcode_login (première fois)")
         try:
             qr_code_json = json.loads(data["qr_code_json"])
-            _LOGGER.debug("QR code JSON parsé avec succès, URL: %s", qr_code_json.get("url", "N/A"))
+        except json.JSONDecodeError as err:
+            _LOGGER.error("JSONDecodeError: %s", err)
+            raise InvalidResponseError(f"QR code JSON invalide: {err}") from err
+
+        _LOGGER.debug("QR code JSON parsé avec succès, URL: %s", qr_code_json.get("url", "N/A"))
+        try:
+            # skip_2fa: after a successful login, pronotepy probes
+            # PageInfosPerso (tab 49) just to detect whether 2FA is on. Schools
+            # that deny that tab answer "3 | Accès refusé", which surfaced as an
+            # authentication failure although the login itself had worked. The
+            # probe is not needed here: account_pin and device_name are passed
+            # to every login, so pronotepy answers the two-factor check when
+            # Pronote actually asks for it.
             client = client_class.qrcode_login(
                 qr_code=qr_code_json,
                 pin=data["qr_code_pin"],
                 uuid=data["qr_code_uuid"],
-                account_pin=data.get("account_pin"),
+                account_pin=_account_pin(data),
                 client_identifier=data.get("client_identifier"),
-                device_name=data.get("device_name"),
+                device_name=_device_name(data),
+                skip_2fa=True,
             )
-            _LOGGER.debug("qrcode_login réussi, client créé")
-
-            # Export credentials pour sauvegarde
-            exported = client.export_credentials()
-            credentials = Credentials(
-                pronote_url=exported.get("pronote_url", ""),
-                username=exported.get("username", ""),
-                password=exported.get("password", ""),
-                uuid=exported.get("uuid"),
-                client_identifier=exported.get("client_identifier"),
+            _check_logged_in(
+                client,
+                "Pronote a refusé ce QR code : PIN incorrect, ou QR code expiré ou déjà utilisé "
+                "(il n'est valable que dix minutes, et une seule fois)",
             )
-            return client, credentials
-        except json.JSONDecodeError as err:
-            _LOGGER.error("JSONDecodeError: %s", err)
-            raise InvalidResponseError(f"QR code JSON invalide: {err}") from err
+        except AuthenticationError:
+            raise
         except Exception as err:
+            _raise_if_ip_suspended(err)
             _LOGGER.error("Exception dans qrcode_login: %s - %s", type(err).__name__, err)
             raise AuthenticationError(f"QR code login échoué: {err}") from err
+
+        _LOGGER.debug("qrcode_login réussi, client créé")
+        exported = client.export_credentials()
+        credentials = Credentials(
+            pronote_url=exported.get("pronote_url", ""),
+            username=exported.get("username", ""),
+            password=exported.get("password", ""),
+            uuid=exported.get("uuid"),
+            client_identifier=exported.get("client_identifier"),
+        )
+        return client, credentials
 
     def _normalize_url(self, url: str, account_type: str) -> str:
         """Normalise l'URL Pronote."""

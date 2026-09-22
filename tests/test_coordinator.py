@@ -155,6 +155,25 @@ class TestPronoteDataUpdateCoordinator:
         mock_create.assert_called_once()
 
     @pytest.mark.asyncio
+    async def test_a_suspended_ip_is_retried_not_reauthenticated(self, mock_coordinator):
+        """A banned IP must never open a reauth flow.
+
+        Asking for a new QR code makes the user retry, and retrying is exactly
+        what keeps Pronote's ban alive.
+        """
+        from custom_components.pronote.api import IPSuspendedError
+
+        mock_coordinator._api_client.is_authenticated.return_value = False
+        mock_coordinator._api_client.authenticate.side_effect = IPSuspendedError("IP suspendue")
+
+        with patch("custom_components.pronote.repairs.async_create_rate_limited_issue") as mock_create:
+            with pytest.raises(UpdateFailed):
+                await mock_coordinator._async_update_data()
+
+        mock_create.assert_called_once()
+        assert mock_create.call_args[0][2] == 900
+
+    @pytest.mark.asyncio
     async def test_async_update_data_circuit_breaker_open(self, mock_coordinator):
         """Test circuit breaker open error handling."""
         from custom_components.pronote.api import CircuitBreakerOpenError
@@ -620,9 +639,10 @@ class TestCoordinatorAdditionalCoverage:
         assert call_kwargs["data"]["qr_code_password"] == "new_token"
         assert call_kwargs["data"]["qr_code_uuid"] == "new_uuid"
         assert call_kwargs["data"]["client_identifier"] == "new_client_id"
-        # Single-use QR code data must be removed after successful auth
+        # Single-use QR payload must be removed after successful auth
         assert "qr_code_json" not in call_kwargs["data"]
-        assert "qr_code_pin" not in call_kwargs["data"]
+        # ...but the PIN stays: Pronote re-runs its two-factor check later on
+        assert call_kwargs["data"]["qr_code_pin"] == "1234"
 
     @pytest.mark.asyncio
     async def test_check_token_drift_detects_silent_rotation(self, mock_coordinator):
@@ -820,3 +840,39 @@ class TestCoordinatorAdditionalCoverage:
 
         # Should not raise and not call trigger
         mock_coordinator._trigger_event.assert_not_called()
+
+
+class TestAuthConfigFromOptions:
+    """device_name and account_pin are set in the options, not at setup."""
+
+    @staticmethod
+    def _coordinator(data, options):
+        coordinator = PronoteDataUpdateCoordinator.__new__(PronoteDataUpdateCoordinator)
+        coordinator.config_entry = MagicMock()
+        coordinator.config_entry.data = data
+        coordinator.config_entry.options = options
+        return coordinator
+
+    def test_the_options_win_over_the_entry(self):
+        coordinator = self._coordinator(
+            {"connection_type": "qrcode", "device_name": "Home Assistant"},
+            {"device_name": "Salon", "account_pin": "9876"},
+        )
+
+        config = coordinator._auth_config()
+
+        assert config["device_name"] == "Salon"
+        assert config["account_pin"] == "9876"
+        assert config["connection_type"] == "qrcode"
+
+    def test_an_empty_option_never_erases_the_stored_value(self):
+        """The options form submits "" for an untouched field."""
+        coordinator = self._coordinator(
+            {"device_name": "Home Assistant"},
+            {"device_name": "", "account_pin": ""},
+        )
+
+        config = coordinator._auth_config()
+
+        assert config["device_name"] == "Home Assistant"
+        assert "account_pin" not in config
