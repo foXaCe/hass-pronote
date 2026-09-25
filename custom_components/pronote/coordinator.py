@@ -153,6 +153,10 @@ class PronoteDataUpdateCoordinator(TimestampDataUpdateCoordinator):
             except ConnectionError as err:
                 _get_repairs()[0](self.hass, self.config_entry, str(err))
                 raise UpdateFailed(f"Connection error with Pronote: {err}") from err
+            except InvalidResponseError as err:
+                # A malformed answer is not a credentials problem: retry rather
+                # than send the user after a new QR code.
+                raise UpdateFailed(f"Pronote answered something unexpected, will retry: {err}") from err
             except Exception as err:
                 raise UpdateFailed(f"Error authenticating with Pronote: {err}") from err
 

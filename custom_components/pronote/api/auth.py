@@ -43,6 +43,23 @@ def _account_pin(data: dict[str, Any]) -> str | None:
     return data.get("account_pin") or data.get("qr_code_pin") or None
 
 
+def _raise_if_malformed_response(err: Exception) -> None:
+    """Tell a broken server answer apart from a refused token.
+
+    pronotepy indexes the server payload directly (``response_data["dataSec"]``
+    in pronoteAPI), so an answer that is not the expected shape surfaces as a
+    bare KeyError or TypeError. Wrapped as an authentication failure, it told
+    users their token had expired and sent them burning QR codes over a
+    problem that has nothing to do with credentials — and that a later refresh
+    may well recover from on its own.
+    """
+    if isinstance(err, KeyError | TypeError | IndexError):
+        raise InvalidResponseError(
+            f"Réponse inattendue de Pronote (champ {err} manquant) — le serveur a mal répondu, "
+            "les identifiants ne sont pas en cause"
+        ) from err
+
+
 def _raise_if_ip_suspended(err: Exception) -> None:
     """Turn Pronote's IP ban into a retryable error, not a credentials problem.
 
@@ -115,7 +132,7 @@ class PronoteAuth:
             raise ConnectionError(f"Erreur réseau: {err}") from err
         except builtins.ConnectionError as err:
             raise ConnectionError(f"Erreur réseau: {err}") from err
-        except (AuthenticationError, IPSuspendedError):
+        except (AuthenticationError, IPSuspendedError, InvalidResponseError):
             # Already typed by the login helpers; re-wrapping would hide the
             # subclass the config flow uses to pick its error message.
             raise
@@ -159,6 +176,7 @@ class PronoteAuth:
             )
         except Exception as err:
             _raise_if_ip_suspended(err)
+            _raise_if_malformed_response(err)
             raise AuthenticationError(f"Login échoué: {err}") from err
 
         # Nettoyage sécurisé
@@ -237,6 +255,7 @@ class PronoteAuth:
             raise
         except Exception as err:
             _raise_if_ip_suspended(err)
+            _raise_if_malformed_response(err)
             _LOGGER.debug("Token login échoué: %s - %s", type(err).__name__, err)
             raise AuthenticationError(
                 f"Token expiré, veuillez reconfigurer l'intégration avec un nouveau QR code: {err}"
@@ -293,6 +312,7 @@ class PronoteAuth:
             raise
         except Exception as err:
             _raise_if_ip_suspended(err)
+            _raise_if_malformed_response(err)
             _LOGGER.error("Exception dans qrcode_login: %s - %s", type(err).__name__, err)
             raise AuthenticationError(f"QR code login échoué: {err}") from err
 

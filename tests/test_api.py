@@ -1737,3 +1737,66 @@ class TestPronoteAuthAdditionalCoverage:
 
             assert client is mock_client
             # Verify the code ran without error (coverage is what matters here)
+
+
+class TestMalformedServerAnswer:
+    """A broken payload is not a credentials problem.
+
+    pronotepy indexes the server answer directly, so an unexpected shape
+    surfaces as a bare KeyError. Wrapped as an authentication failure, it told
+    a user "Token expiré, veuillez reconfigurer l'intégration avec un nouveau
+    QR code: 'dataSec'" and sent them burning QR codes for two days over a
+    server response.
+    """
+
+    TOKEN_DATA = {
+        "qr_code_url": "https://example.com",
+        "qr_code_username": "user",
+        "qr_code_password": "token",
+        "qr_code_uuid": "uuid123",
+    }
+    QR_DATA = {"qr_code_json": '{"url": "x"}', "qr_code_pin": "1234", "qr_code_uuid": "uuid123"}
+
+    def test_the_token_path_reports_the_server_not_the_token(self):
+        auth = PronoteAuth()
+
+        with patch("custom_components.pronote.api.auth.pronotepy.Client.token_login", side_effect=KeyError("dataSec")):
+            with pytest.raises(InvalidResponseError) as err:
+                auth._auth_qrcode(dict(self.TOKEN_DATA), "student")
+
+        assert not isinstance(err.value, AuthenticationError)
+        assert "dataSec" in str(err.value)
+        assert "QR code" not in str(err.value)
+
+    def test_the_qrcode_path_too(self):
+        auth = PronoteAuth()
+
+        with patch("custom_components.pronote.api.auth.pronotepy.Client.qrcode_login", side_effect=KeyError("dataSec")):
+            with pytest.raises(InvalidResponseError):
+                auth._auth_qrcode(dict(self.QR_DATA), "student")
+
+    def test_the_password_path_too(self):
+        auth = PronoteAuth()
+        data = {"url": "https://example.com/eleve.html", "username": "user", "password": "pass"}
+
+        with patch("custom_components.pronote.api.auth.pronotepy.Client", side_effect=TypeError("bad payload")):
+            with pytest.raises(InvalidResponseError):
+                auth._auth_username_password(data, "student")
+
+    async def test_authenticate_keeps_it_typed(self):
+        """authenticate() must not re-wrap it into a generic AuthenticationError."""
+        auth = PronoteAuth()
+
+        with patch("custom_components.pronote.api.auth.pronotepy.Client.token_login", side_effect=KeyError("dataSec")):
+            with pytest.raises(InvalidResponseError):
+                await auth.authenticate("qrcode", dict(self.TOKEN_DATA))
+
+    def test_a_genuinely_refused_token_is_still_a_credentials_problem(self):
+        """The new guard must not swallow the real case."""
+        auth = PronoteAuth()
+        client = MagicMock()
+        client.logged_in = False
+
+        with patch("custom_components.pronote.api.auth.pronotepy.Client.token_login", return_value=client):
+            with pytest.raises(QRCodeRejectedError):
+                auth._auth_qrcode(dict(self.TOKEN_DATA), "student")

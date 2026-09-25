@@ -155,6 +155,24 @@ class TestPronoteDataUpdateCoordinator:
         mock_create.assert_called_once()
 
     @pytest.mark.asyncio
+    async def test_a_malformed_answer_is_retried_not_reauthenticated(self, mock_coordinator):
+        """A broken payload is not a credentials problem.
+
+        A bare KeyError('dataSec') was reported as "Token expiré, veuillez
+        reconfigurer l'intégration avec un nouveau QR code" and opened a reauth
+        flow, over a server answer.
+        """
+        from custom_components.pronote.api import InvalidResponseError
+
+        mock_coordinator._api_client.is_authenticated.return_value = False
+        mock_coordinator._api_client.authenticate.side_effect = InvalidResponseError(
+            "Réponse inattendue de Pronote (champ 'dataSec' manquant)"
+        )
+
+        with pytest.raises(UpdateFailed, match="unexpected"):
+            await mock_coordinator._async_update_data()
+
+    @pytest.mark.asyncio
     async def test_a_suspended_ip_is_retried_not_reauthenticated(self, mock_coordinator):
         """A banned IP must never open a reauth flow.
 
