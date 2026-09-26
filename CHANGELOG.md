@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.3.2](https://github.com/foXaCe/hass-pronote/compare/v1.3.1...v1.3.2) (2026-09-26)
+
+
+### Bug Fixes
+
+* **auth:** stop losing the QR token across restarts and failed refreshes ([#66](https://github.com/foXaCe/hass-pronote/issues/66)) ([0808ff1](https://github.com/foXaCe/hass-pronote/commit/0808ff14611309f0818e3330d1b0a7e247a9d5e8))
+* **auth:** stop reporting a malformed server answer as an expired token ([#64](https://github.com/foXaCe/hass-pronote/issues/64)) ([1c49d1b](https://github.com/foXaCe/hass-pronote/commit/1c49d1babd4edbf3d993d97463b6f95c14396203))
+
 ## [1.3.1](https://github.com/foXaCe/hass-pronote/compare/v1.3.0...v1.3.1) (2026-09-22)
 
 
