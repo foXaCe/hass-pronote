@@ -580,6 +580,106 @@ class TestCoordinatorAdditionalCoverage:
         mock_coordinator._api_client.reset.assert_called_once()
 
     @pytest.mark.asyncio
+    async def test_token_kept_from_dropped_client_is_used_for_the_next_login(self, mock_coordinator):
+        """A failed session check spent the stored token: log in with the one it received."""
+        from custom_components.pronote.api import AuthenticationError
+        from custom_components.pronote.api.models import Credentials
+
+        mock_coordinator.config_entry.data = {
+            "connection_type": "qrcode",
+            "account_type": "parent",
+            "qr_code_url": "https://example.com",
+            "qr_code_username": "user",
+            "qr_code_password": "spent_token",
+            "qr_code_uuid": "uuid",
+        }
+        mock_coordinator._api_client.is_authenticated.return_value = True
+        mock_coordinator._api_client.check_session = AsyncMock(return_value=False)
+        mock_coordinator._api_client.get_credentials.return_value = Credentials(
+            pronote_url="https://example.com", username="user", password="fresh_token", uuid="uuid"
+        )
+        mock_coordinator._api_client.authenticate = AsyncMock(side_effect=AuthenticationError("stop here"))
+
+        def update_entry_side_effect(entry, **kwargs):
+            entry.data = kwargs["data"]
+
+        with (
+            patch("custom_components.pronote.repairs.async_delete_issue_for_entry"),
+            patch("custom_components.pronote.repairs.async_create_session_expired_issue"),
+            patch.object(
+                mock_coordinator.hass.config_entries, "async_update_entry", side_effect=update_entry_side_effect
+            ),
+            pytest.raises(ConfigEntryAuthFailed),
+        ):
+            await mock_coordinator._async_update_data()
+
+        assert mock_coordinator.config_entry.data["qr_code_password"] == "fresh_token"
+        used_config = mock_coordinator._api_client.authenticate.call_args[0][1]
+        assert used_config["qr_code_password"] == "fresh_token"
+
+    @pytest.mark.asyncio
+    async def test_failed_fetch_persists_the_token_kept_from_the_dropped_client(self, mock_coordinator):
+        """pronotepy rotated the token mid-fetch, then the fetch failed: the token is saved."""
+        from custom_components.pronote.api.models import Credentials
+
+        mock_coordinator.config_entry.data = {
+            "connection_type": "qrcode",
+            "account_type": "parent",
+            "qr_code_url": "https://example.com",
+            "qr_code_username": "user",
+            "qr_code_password": "spent_token",
+            "qr_code_uuid": "uuid",
+        }
+        mock_coordinator._api_client.is_authenticated.return_value = True
+        mock_coordinator._api_client.check_session = AsyncMock(return_value=True)
+        mock_coordinator._api_client._client = MagicMock(password="spent_token")
+        mock_coordinator._api_client.fetch_all_data.side_effect = RuntimeError("boom")
+        mock_coordinator._api_client.get_credentials.return_value = None
+
+        def reset():
+            mock_coordinator._api_client.get_credentials.return_value = Credentials(
+                pronote_url="https://example.com", username="user", password="fresh_token", uuid="uuid"
+            )
+
+        mock_coordinator._api_client.reset.side_effect = reset
+
+        with (
+            patch("custom_components.pronote.repairs.async_delete_issue_for_entry"),
+            patch.object(mock_coordinator.hass.config_entries, "async_update_entry") as mock_update,
+            pytest.raises(UpdateFailed),
+        ):
+            await mock_coordinator._async_update_data()
+
+        mock_update.assert_called_once()
+        assert mock_update.call_args[1]["data"]["qr_code_password"] == "fresh_token"
+
+    def test_late_login_token_is_persisted_at_once(self, mock_coordinator):
+        """A login adopted after its refresh gave up has its token saved right away."""
+        mock_coordinator.config_entry.data = {
+            "connection_type": "qrcode",
+            "account_type": "parent",
+            "qr_code_url": "https://example.com",
+            "qr_code_username": "user",
+            "qr_code_password": "spent_token",
+            "qr_code_uuid": "uuid",
+        }
+        mock_coordinator.config_entry.options = {}
+        mock_coordinator._api_client._client = MagicMock(password="fresh_token")
+        mock_coordinator._api_client._client.export_credentials.return_value = {
+            "pronote_url": "https://example.com",
+            "username": "user",
+            "password": "fresh_token",
+            "uuid": "uuid",
+        }
+        mock_coordinator._api_client.get_credentials = lambda: mock_coordinator._api_client._credentials
+
+        with patch.object(mock_coordinator.hass.config_entries, "async_update_entry") as mock_update:
+            mock_coordinator._persist_late_login()
+
+        mock_update.assert_called_once()
+        assert mock_update.call_args[1]["data"]["qr_code_password"] == "fresh_token"
+
+    @pytest.mark.asyncio
     async def test_async_update_data_saves_qr_credentials_after_auth(self, mock_coordinator):
         """Test QR code credentials are saved immediately after successful auth."""
         from custom_components.pronote.api.models import Credentials
@@ -615,13 +715,20 @@ class TestCoordinatorAdditionalCoverage:
         mock_coordinator._api_client.check_session = AsyncMock(return_value=False)
         mock_coordinator._api_client.is_authenticated.return_value = True
         mock_coordinator._api_client.fetch_all_data.return_value = mock_pronote_data
-        mock_coordinator._api_client.get_credentials.return_value = Credentials(
+        new_credentials = Credentials(
             pronote_url="https://example.com",
             username="new_user",
             password="new_token",
             uuid="new_uuid",
             client_identifier="new_client_id",
         )
+        # The dropped client carried no token: credentials only appear with the login
+        mock_coordinator._api_client.get_credentials.return_value = None
+
+        async def authenticate(*_args):
+            mock_coordinator._api_client.get_credentials.return_value = new_credentials
+
+        mock_coordinator._api_client.authenticate = AsyncMock(side_effect=authenticate)
         # Set live client password to match saved credentials (no drift)
         mock_coordinator._api_client._client = MagicMock()
         mock_coordinator._api_client._client.password = "new_token"

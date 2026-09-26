@@ -138,7 +138,8 @@ class TestAsyncSetupEntry:
         assert entry.runtime_data is mock_coordinator
         mock_coordinator.async_config_entry_first_refresh.assert_awaited_once()
         hass.config_entries.async_forward_entry_setups.assert_awaited_once_with(entry, PLATFORMS)
-        entry.async_on_unload.assert_called_once()
+        # The update listener, and the stop listener that waits for a pending login
+        assert entry.async_on_unload.call_count == 2
 
     async def test_setup_auth_failure(self, hass: HomeAssistant):
         """When coordinator.async_config_entry_first_refresh raises, the exception propagates."""
@@ -276,6 +277,7 @@ class TestAsyncUnloadEntry:
         entry = MagicMock()
         coordinator = MagicMock()
         coordinator.async_shutdown = AsyncMock()
+        coordinator.async_wait_pending_login = AsyncMock()
         entry.runtime_data = coordinator
         hass.config_entries.async_unload_platforms = AsyncMock(return_value=True)
 
@@ -283,6 +285,7 @@ class TestAsyncUnloadEntry:
 
         assert result is True
         hass.config_entries.async_unload_platforms.assert_awaited_once_with(entry, PLATFORMS)
+        coordinator.async_wait_pending_login.assert_awaited_once()
         coordinator.async_shutdown.assert_awaited_once()
 
     async def test_unload_no_shutdown_on_failure(self, hass: HomeAssistant):

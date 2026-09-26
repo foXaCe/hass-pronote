@@ -95,6 +95,11 @@ class PronoteAPIClient:
         self._credentials: Credentials | None = None
         self._connection_type: str | None = None
         self._config_data: dict[str, Any] | None = None
+        # A login that outlived the call that started it (timeout, or the
+        # refresh task cancelled by a Home Assistant stop), and the hook that
+        # persists the token it received once it lands.
+        self._pending_login: asyncio.Future | None = None
+        self.on_late_login: Callable[[], None] | None = None
 
     async def authenticate(
         self,
@@ -117,24 +122,36 @@ class PronoteAPIClient:
         self._connection_type = connection_type
         self._config_data = config_data
 
+        # The login runs in a thread that neither a timeout nor a cancellation
+        # can stop: it goes on, spends the stored token and receives the next
+        # one. Shielding the task lets a late success be adopted instead of
+        # dropping that new token.
+        login = asyncio.ensure_future(self._auth.authenticate(connection_type, config_data))
+        # Known from the start: a Home Assistant stop fires its listeners
+        # before the cancellation of this refresh has even reached us.
+        self._pending_login = login
         try:
-            # Exécution avec await car authenticate est maintenant async
-            client, creds = await asyncio.wait_for(
-                self._auth.authenticate(connection_type, config_data),
-                timeout=self.timeout,
-            )
+            client, creds = await asyncio.wait_for(asyncio.shield(login), timeout=self.timeout)
 
+            self._pending_login = None
             self._client = client
             self._credentials = creds
             self._circuit_breaker.record_success()
 
+        except asyncio.CancelledError:
+            # Home Assistant cancels the refresh tasks when it stops.
+            self._keep_pending_login(login)
+            raise
         except TimeoutError as err:
+            self._keep_pending_login(login)
             self._circuit_breaker.record_failure()
             raise ConnectionError(f"Timeout authentification ({self.timeout}s)") from err
         except PronoteAPIError:
+            self._pending_login = None
             self._circuit_breaker.record_failure()
             raise
         except Exception as err:
+            self._pending_login = None
             self._circuit_breaker.record_failure()
             raise AuthenticationError(f"Authentification inattendue: {err}") from err
 
@@ -158,7 +175,7 @@ class PronoteAPIClient:
             return True
         except Exception:
             _LOGGER.debug("Session check failed, session expired")
-            self._client = None
+            self._drop_client()
             return False
 
     def get_credentials(self) -> Credentials | None:
@@ -171,7 +188,73 @@ class PronoteAPIClient:
         Note: credentials are preserved so they can still be persisted
         to the config entry if needed.
         """
-        self._client = None
+        self._drop_client()
+
+    def _drop_client(self) -> None:
+        """Forget the client, but not the token pronotepy may have put on it.
+
+        On most server errors pronotepy runs refresh(), a full login that
+        spends the stored token and keeps the next one in ``client.password``.
+        When that recovery fails too, the client is the only holder of the
+        live token: dropping it with the token left the config entry with a
+        spent one, and the next login asked for a new QR code.
+        """
+        client, self._client = self._client, None
+        if client is None or self._credentials is None:
+            return
+        live_password = getattr(client, "password", None)
+        if not live_password or live_password == self._credentials.password:
+            return
+        try:
+            exported = client.export_credentials()
+        except Exception:  # keep the token even without the rest
+            exported = {}
+        _LOGGER.debug("Pronote rotated the token on a client being dropped, keeping it")
+        self._credentials = Credentials(
+            pronote_url=exported.get("pronote_url", self._credentials.pronote_url),
+            username=exported.get("username", self._credentials.username),
+            password=live_password,
+            uuid=exported.get("uuid", self._credentials.uuid),
+            client_identifier=exported.get("client_identifier", self._credentials.client_identifier),
+        )
+
+    def _keep_pending_login(self, login: asyncio.Future) -> None:
+        """Follow a login nobody awaits any more, to keep what it returns."""
+        self._pending_login = login
+        login.add_done_callback(self._adopt_late_login)
+
+    def _adopt_late_login(self, login: asyncio.Future) -> None:
+        """Keep a login that finished after authenticate() stopped waiting.
+
+        Idempotent: the stop listener and the cancelled refresh may both get
+        here, in either order.
+        """
+        if self._pending_login is login:
+            self._pending_login = None
+        if login.cancelled() or login.exception() is not None or self._client is not None:
+            return
+        client, credentials = login.result()
+        _LOGGER.debug("Pronote login finished after its caller gave up, keeping its session and token")
+        self._client, self._credentials = client, credentials
+        if self.on_late_login is not None:
+            self.on_late_login()
+
+    async def async_wait_pending_login(self, timeout: float) -> None:
+        """Let a login still running finish, so its token can be saved.
+
+        Called when Home Assistant stops: the process would otherwise exit
+        with the stored token spent and the new one never written.
+        """
+        login = self._pending_login
+        if login is None:
+            return
+        if not login.done():
+            _LOGGER.debug("Waiting for a Pronote login still running (at most %ss)", timeout)
+            await asyncio.wait({login}, timeout=timeout)
+        if login.done():
+            # Do not count on the cancelled refresh to adopt it: it may not
+            # run again before Home Assistant writes its files.
+            self._adopt_late_login(login)
 
     async def fetch_all_data(
         self,

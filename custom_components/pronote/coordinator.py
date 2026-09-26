@@ -9,7 +9,7 @@ from datetime import date, datetime, timedelta
 from typing import Any
 from zoneinfo import ZoneInfo
 
-from homeassistant.core import HomeAssistant, callback
+from homeassistant.core import Event, HomeAssistant, callback
 from homeassistant.exceptions import ConfigEntryAuthFailed
 from homeassistant.helpers.debounce import Debouncer
 from homeassistant.helpers.update_coordinator import TimestampDataUpdateCoordinator, UpdateFailed
@@ -42,6 +42,10 @@ from .const import (
 from .pronote_formatter import format_absence, format_delay, format_evaluation, format_grade
 
 _LOGGER = logging.getLogger(__name__)
+
+# How long a Home Assistant stop waits for a Pronote login still running. Past
+# the 30 s login timeout, the login is most likely stuck on the network.
+PENDING_LOGIN_STOP_TIMEOUT = 45
 
 
 def _get_repairs():
@@ -109,6 +113,7 @@ class PronoteDataUpdateCoordinator(TimestampDataUpdateCoordinator):
         )
         self.config_entry = entry
         self._api_client = PronoteAPIClient(hass)
+        self._api_client.on_late_login = self._persist_late_login
         self._previous_period_cache: dict[str, Any] | None = None
         self._previous_period_cache_date: date | None = None
 
@@ -136,6 +141,11 @@ class PronoteDataUpdateCoordinator(TimestampDataUpdateCoordinator):
         t_auth_start = time.perf_counter()
         session_valid = await self._api_client.check_session() if self._api_client.is_authenticated() else False
         if not session_valid:
+            # A failed session check may have dropped a client that pronotepy
+            # had logged in again, spending the stored token: log in with the
+            # one it received, not with the spent one.
+            if self._persist_kept_token(connection_type):
+                config_data = self._auth_config()
             try:
                 await self._api_client.authenticate(connection_type, config_data)
                 # Clear any transient issues after successful auth
@@ -195,17 +205,21 @@ class PronoteDataUpdateCoordinator(TimestampDataUpdateCoordinator):
             raise UpdateFailed(f"Rate limited by Pronote: {err}") from err
         except AuthenticationError as err:
             self._api_client.reset()  # Force re-auth on next refresh
+            self._persist_kept_token(connection_type)
             _LOGGER.warning("Session expired during fetch, will re-authenticate on next cycle: %s", err)
             raise UpdateFailed(f"Session expired, will retry: {err}") from err
         except InvalidResponseError as err:
             self._api_client.reset()
+            self._persist_kept_token(connection_type)
             raise UpdateFailed(f"Invalid response from Pronote: {err}") from err
         except ConnectionError as err:
             self._api_client.reset()
+            self._persist_kept_token(connection_type)
             _get_repairs()[0](self.hass, self.config_entry, str(err))
             raise UpdateFailed(f"Connection error: {err}") from err
         except Exception as err:
             self._api_client.reset()
+            self._persist_kept_token(connection_type)
             raise UpdateFailed(f"Error fetching data from Pronote: {err}") from err
 
         # Detect silent internal token rotation by pronotepy's auto-refresh
@@ -359,6 +373,42 @@ class PronoteDataUpdateCoordinator(TimestampDataUpdateCoordinator):
 
         self.hass.config_entries.async_update_entry(self.config_entry, data=new_data)
         _LOGGER.debug("Pronote token updated and persisted to config entry successfully")
+
+    @callback
+    def _persist_late_login(self) -> None:
+        """Save the token of a login that finished after its refresh gave up."""
+        config_data = self._auth_config()
+        self._check_token_drift(config_data, config_data.get("connection_type", "username_password"))
+
+    async def async_wait_pending_login(self, _event: Event | None = None) -> None:
+        """Keep Home Assistant from exiting with a login halfway done.
+
+        Stopping cancels the refresh tasks, not the login thread: it spends the
+        stored token anyway. Waiting for it lets the new token be saved before
+        the final write, where it used to be lost and the next start refused.
+        """
+        await self._api_client.async_wait_pending_login(PENDING_LOGIN_STOP_TIMEOUT)
+
+    def _persist_kept_token(self, connection_type: str) -> bool:
+        """Persist the token the API client kept from a client it dropped.
+
+        pronotepy's recovery login can spend the stored token and then fail,
+        after which the client is dropped. The API client keeps the token it
+        received; saving it here is what keeps the next login from being
+        refused. Returns True when the config entry was updated.
+        """
+        if connection_type != "qrcode":
+            return False
+
+        credentials = self._api_client.get_credentials()
+        if credentials is None or not credentials.password:
+            return False
+        if credentials.password == self.config_entry.data.get("qr_code_password"):
+            return False
+
+        _LOGGER.debug("Pronote: token rotated on a dropped client, persisting it")
+        self._save_credentials_if_needed(dict(self.config_entry.data), connection_type)
+        return True
 
     def _check_token_drift(self, config_data: dict[str, Any], connection_type: str) -> None:
         """Detect and persist silent token rotation by pronotepy's internal refresh().
