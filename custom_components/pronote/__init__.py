@@ -7,6 +7,7 @@ import logging
 import time
 from datetime import timedelta
 
+from homeassistant.const import EVENT_HOMEASSISTANT_STOP
 from homeassistant.core import HomeAssistant
 
 import custom_components.pronote._compat  # noqa: F401  # Apply autoslot hotfix before pronotepy
@@ -78,6 +79,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: PronoteConfigEntry) -> b
     entry.runtime_data = coordinator
 
     entry.async_on_unload(entry.add_update_listener(update_listener))
+    # A login cut short by the stop has spent the stored token: let it land
+    # so the next one is saved before Home Assistant writes its files.
+    entry.async_on_unload(hass.bus.async_listen_once(EVENT_HOMEASSISTANT_STOP, coordinator.async_wait_pending_login))
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     t4 = time.perf_counter()
@@ -111,6 +115,7 @@ async def async_unload_entry(hass: HomeAssistant, entry: PronoteConfigEntry) -> 
     unload_ok = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
     if unload_ok:
         coordinator = entry.runtime_data
+        await coordinator.async_wait_pending_login()
         await coordinator.async_shutdown()
     return unload_ok
 

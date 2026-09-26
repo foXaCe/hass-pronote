@@ -31,6 +31,12 @@ _LOGGER = logging.getLogger(__name__)
 AUTH_TIMEOUT = 30
 CONNECT_TIMEOUT = 10
 
+TOKEN_REFUSED = "Jeton Pronote refusé, il faut un nouveau QR code"
+QR_CODE_REFUSED = (
+    "Pronote a refusé ce QR code : PIN incorrect, ou QR code expiré ou déjà utilisé "
+    "(il n'est valable que dix minutes, et une seule fois)"
+)
+
 
 def _account_pin(data: dict[str, Any]) -> str | None:
     """PIN à présenter quand Pronote redemande la double authentification.
@@ -41,6 +47,26 @@ def _account_pin(data: dict[str, Any]) -> str | None:
     on s'en sert donc par défaut.
     """
     return data.get("account_pin") or data.get("qr_code_pin") or None
+
+
+def _raise_if_login_refused(err: Exception, message: str) -> None:
+    """Unmask a refused login that ParentClient reports as KeyError('dataSec').
+
+    ``Client.__init__`` records a refusal in ``logged_in`` and leaves
+    ``parametres_utilisateur`` empty; ``ParentClient.__init__`` then indexes it
+    before returning, so a spent token on a parent account never reached
+    ``_check_logged_in`` and came out as a bare KeyError. The frame that raised
+    still holds the client, which tells the two cases apart for certain.
+    """
+    if not isinstance(err, KeyError):
+        return
+    tb = err.__traceback__
+    while tb is not None and tb.tb_next is not None:
+        tb = tb.tb_next
+    client = tb.tb_frame.f_locals.get("self") if tb is not None else None
+    if isinstance(client, pronotepy.Client) and client.logged_in is False:
+        _LOGGER.debug("Pronote a rejeté la connexion (compte parent): %s", message)
+        raise QRCodeRejectedError(message) from err
 
 
 def _raise_if_malformed_response(err: Exception) -> None:
@@ -250,11 +276,12 @@ class PronoteAuth:
                 device_name=_device_name(data),
                 client_identifier=data.get("client_identifier"),
             )
-            _check_logged_in(client, "Jeton Pronote refusé, il faut un nouveau QR code")
+            _check_logged_in(client, TOKEN_REFUSED)
         except AuthenticationError:
             raise
         except Exception as err:
             _raise_if_ip_suspended(err)
+            _raise_if_login_refused(err, TOKEN_REFUSED)
             _raise_if_malformed_response(err)
             _LOGGER.debug("Token login échoué: %s - %s", type(err).__name__, err)
             raise AuthenticationError(
@@ -303,15 +330,12 @@ class PronoteAuth:
                 device_name=_device_name(data),
                 skip_2fa=True,
             )
-            _check_logged_in(
-                client,
-                "Pronote a refusé ce QR code : PIN incorrect, ou QR code expiré ou déjà utilisé "
-                "(il n'est valable que dix minutes, et une seule fois)",
-            )
+            _check_logged_in(client, QR_CODE_REFUSED)
         except AuthenticationError:
             raise
         except Exception as err:
             _raise_if_ip_suspended(err)
+            _raise_if_login_refused(err, QR_CODE_REFUSED)
             _raise_if_malformed_response(err)
             _LOGGER.error("Exception dans qrcode_login: %s - %s", type(err).__name__, err)
             raise AuthenticationError(f"QR code login échoué: {err}") from err

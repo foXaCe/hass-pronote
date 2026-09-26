@@ -133,6 +133,7 @@ def _mock_client(fetch_result=None, gate: asyncio.Event | None = None):
     client.authenticate = AsyncMock()
     client.reset = MagicMock()
     client.get_credentials = MagicMock(return_value=None)
+    client.async_wait_pending_login = AsyncMock()
     client._client = None
 
     async def _fetch(**kwargs):

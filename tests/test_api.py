@@ -4,6 +4,7 @@ from datetime import date, datetime
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
+import pronotepy
 import pytest
 
 from custom_components.pronote.api import (
@@ -844,6 +845,198 @@ class TestPronoteAPIClientIsAuthenticated:
         client = PronoteAPIClient()
         client._client = None
         assert client.is_authenticated() is False
+
+
+class TestPronoteAPIClientKeepsRotatedToken:
+    """The live token must survive the client that carried it."""
+
+    @staticmethod
+    def _client_with_rotated_token() -> PronoteAPIClient:
+        from custom_components.pronote.api.models import Credentials
+
+        client = PronoteAPIClient()
+        client._credentials = Credentials(
+            pronote_url="https://example.com/pronote/", username="user", password="spent_token", uuid="uuid"
+        )
+        # pronotepy's refresh() logged in again: the stored token is spent
+        client._client = MagicMock(password="fresh_token")
+        client._client.export_credentials.return_value = {
+            "pronote_url": "https://example.com/pronote/",
+            "username": "user",
+            "password": "fresh_token",
+            "uuid": "uuid",
+            "client_identifier": "cid",
+        }
+        return client
+
+    @pytest.mark.asyncio
+    async def test_failed_session_check_keeps_the_rotated_token(self):
+        """A session check that fails after pronotepy's recovery login keeps its token."""
+        client = self._client_with_rotated_token()
+        client._client.session_check.side_effect = KeyError("dataSec")
+
+        assert await client.check_session() is False
+        assert client._client is None
+        assert client.get_credentials().password == "fresh_token"
+        assert client.get_credentials().client_identifier == "cid"
+
+    def test_reset_keeps_the_rotated_token(self):
+        """Dropping the client after a failed fetch keeps its token."""
+        client = self._client_with_rotated_token()
+
+        client.reset()
+
+        assert client._client is None
+        assert client.get_credentials().password == "fresh_token"
+
+    def test_reset_without_rotation_leaves_credentials_alone(self):
+        """No rotation, nothing to keep."""
+        client = self._client_with_rotated_token()
+        client._client.password = "spent_token"
+        before = client.get_credentials()
+
+        client.reset()
+
+        assert client.get_credentials() is before
+
+    @pytest.mark.asyncio
+    async def test_login_finishing_after_the_timeout_is_adopted(self):
+        """The thread goes on after the timeout: its session and new token are kept."""
+        import asyncio
+
+        from custom_components.pronote.api import ConnectionError
+        from custom_components.pronote.api.models import Credentials
+
+        release = asyncio.Event()
+        late_client = MagicMock()
+        late_credentials = Credentials(pronote_url="u", username="user", password="fresh_token")
+
+        async def slow_login(*_args):
+            await release.wait()
+            return late_client, late_credentials
+
+        client = PronoteAPIClient(timeout=0.01)
+        with patch.object(client._auth, "authenticate", side_effect=slow_login):
+            with pytest.raises(ConnectionError, match="Timeout authentification"):
+                await client.authenticate("qrcode", {})
+            assert client._client is None
+
+            release.set()
+            for _ in range(5):
+                await asyncio.sleep(0)
+
+        assert client._client is late_client
+        assert client.get_credentials() is late_credentials
+
+
+class TestPronoteAPIClientLoginCutShortByStop:
+    """Home Assistant cancels the refresh on stop, not the login thread."""
+
+    @pytest.mark.asyncio
+    async def test_cancelled_login_is_adopted_and_reported(self):
+        """The login spends the token anyway: its result is kept and the hook fires."""
+        import asyncio
+
+        from custom_components.pronote.api.models import Credentials
+
+        release = asyncio.Event()
+        late_client = MagicMock()
+        late_credentials = Credentials(pronote_url="u", username="user", password="fresh_token")
+
+        async def slow_login(*_args):
+            await release.wait()
+            return late_client, late_credentials
+
+        client = PronoteAPIClient()
+        client.on_late_login = MagicMock()
+        with patch.object(client._auth, "authenticate", side_effect=slow_login):
+            refresh = asyncio.ensure_future(client.authenticate("qrcode", {}))
+            await asyncio.sleep(0)
+            refresh.cancel()
+            with pytest.raises(asyncio.CancelledError):
+                await refresh
+
+            release.set()
+            await client.async_wait_pending_login(timeout=1)
+            await asyncio.sleep(0)
+
+        assert client._client is late_client
+        assert client.get_credentials() is late_credentials
+        client.on_late_login.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_wait_pending_login_waits_for_the_login(self):
+        """Stopping waits for the login instead of exiting with the token spent."""
+        import asyncio
+
+        release = asyncio.Event()
+
+        async def slow_login(*_args):
+            await release.wait()
+            return MagicMock(), MagicMock()
+
+        client = PronoteAPIClient(timeout=0.01)
+        with patch.object(client._auth, "authenticate", side_effect=slow_login):
+            with pytest.raises(Exception, match="Timeout"):
+                await client.authenticate("qrcode", {})
+
+            waiter = asyncio.ensure_future(client.async_wait_pending_login(timeout=1))
+            await asyncio.sleep(0)
+            assert not waiter.done()
+
+            release.set()
+            await waiter
+
+        assert client._pending_login is None
+        assert client._client is not None
+
+    @pytest.mark.asyncio
+    async def test_stop_listener_running_before_the_cancellation_still_saves_the_token(self):
+        """Home Assistant fires the stop event before the refresh sees its cancellation.
+
+        Reproduced on 2026-09-26: the listener found no pending login, returned
+        at once, and the token spent by the login thread was lost.
+        """
+        import asyncio
+
+        from custom_components.pronote.api.models import Credentials
+
+        release = asyncio.Event()
+        late_client = MagicMock()
+        late_credentials = Credentials(pronote_url="u", username="user", password="fresh_token")
+
+        async def slow_login(*_args):
+            await release.wait()
+            return late_client, late_credentials
+
+        client = PronoteAPIClient()
+        client.on_late_login = MagicMock()
+        with patch.object(client._auth, "authenticate", side_effect=slow_login):
+            refresh = asyncio.ensure_future(client.authenticate("qrcode", {}))
+            await asyncio.sleep(0)
+
+            # The stop listener runs first, the refresh is not cancelled yet
+            waiter = asyncio.ensure_future(client.async_wait_pending_login(timeout=1))
+            await asyncio.sleep(0)
+            refresh.cancel()
+            release.set()
+            await waiter
+
+            assert client._client is late_client
+            client.on_late_login.assert_called_once()
+
+            with pytest.raises(asyncio.CancelledError):
+                await refresh
+            await asyncio.sleep(0)
+
+        # The cancelled refresh adopting it too must not report it twice
+        client.on_late_login.assert_called_once()
+        assert client.get_credentials() is late_credentials
+
+    @pytest.mark.asyncio
+    async def test_wait_pending_login_without_login_returns_at_once(self):
+        """Nothing running, nothing to wait for."""
+        await PronoteAPIClient().async_wait_pending_login(timeout=1)
 
 
 class TestPronoteAPIClientSafeGetSuccess:
@@ -1737,6 +1930,68 @@ class TestPronoteAuthAdditionalCoverage:
 
             assert client is mock_client
             # Verify the code ran without error (coverage is what matters here)
+
+
+class _RefusedParentClient(pronotepy.ParentClient):
+    """What pronotepy's ParentClient does when Pronote refuses the login.
+
+    Client.__init__ records the refusal in ``logged_in`` and leaves
+    ``parametres_utilisateur`` empty, then ParentClient.__init__ indexes it.
+    Reproduced on 2026-09-26 against the real server with a spent token.
+    """
+
+    def __init__(self, *_args, **_kwargs):
+        self.logged_in = False
+        self.parametres_utilisateur = {}
+        self.children = list(self.parametres_utilisateur["dataSec"]["data"]["ressource"]["listeRessources"])
+
+    @classmethod
+    def token_login(cls, *args, **kwargs):
+        return cls(*args, **kwargs)
+
+    @classmethod
+    def qrcode_login(cls, *args, **kwargs):
+        return cls(*args, **kwargs)
+
+
+class TestRefusedParentLogin:
+    """A spent token on a parent account is a refused login, not a server fault."""
+
+    TOKEN_DATA = {
+        "qr_code_url": "https://example.com",
+        "qr_code_username": "user",
+        "qr_code_password": "spent_token",
+        "qr_code_uuid": "uuid123",
+    }
+    QR_DATA = {"qr_code_json": '{"url": "x"}', "qr_code_pin": "1234", "qr_code_uuid": "uuid123"}
+
+    def test_spent_token_asks_for_a_new_qr_code(self):
+        auth = PronoteAuth()
+
+        with patch("custom_components.pronote.api.auth.pronotepy.ParentClient", _RefusedParentClient):
+            with pytest.raises(QRCodeRejectedError, match="Jeton Pronote refusé"):
+                auth._auth_qrcode(dict(self.TOKEN_DATA), "parent")
+
+    def test_refused_qr_code_says_so(self):
+        auth = PronoteAuth()
+
+        with patch("custom_components.pronote.api.auth.pronotepy.ParentClient", _RefusedParentClient):
+            with pytest.raises(QRCodeRejectedError, match="refusé ce QR code"):
+                auth._auth_qrcode(dict(self.QR_DATA), "parent")
+
+    def test_missing_datasec_on_a_logged_in_client_stays_a_server_fault(self):
+        """The same KeyError from a client that did log in is still a malformed answer."""
+
+        class _LoggedInParentClient(_RefusedParentClient):
+            def __init__(self, *_args, **_kwargs):
+                self.logged_in = True
+                self.parametres_utilisateur = {}
+                self.children = list(self.parametres_utilisateur["dataSec"])
+
+        auth = PronoteAuth()
+        with patch("custom_components.pronote.api.auth.pronotepy.ParentClient", _LoggedInParentClient):
+            with pytest.raises(InvalidResponseError):
+                auth._auth_qrcode(dict(self.TOKEN_DATA), "parent")
 
 
 class TestMalformedServerAnswer:
