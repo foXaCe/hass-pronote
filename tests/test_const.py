@@ -39,7 +39,7 @@ def test_homework_constants():
 
 
 def test_display_constants():
-    assert DEFAULT_GRADES_TO_DISPLAY == 11
+    assert DEFAULT_GRADES_TO_DISPLAY == 50
     assert EVALUATIONS_TO_DISPLAY == 15
 
 

@@ -638,6 +638,21 @@ class TestPronoteGradesSensor:
 
         assert len(attrs["grades"]) == DEFAULT_GRADES_TO_DISPLAY
 
+    def test_extra_state_attributes_keeps_most_recent_grades(self):
+        """With more grades than the limit, the most recent ones are shown first."""
+        from datetime import date as _date, timedelta
+
+        grades = []
+        for i in range(5):
+            g = _make_grade(subject_name=f"Subject {i}")
+            g.date = _date(2026, 9, 1) + timedelta(days=i)
+            grades.append(g)
+        coord = _make_coordinator(options={"nickname": "Jean", "lunch_break_time": "13:00", "grades_to_display": 2})
+        coord.data["grades"] = grades
+        sensor = PronoteGradesSensor(coord, key="grades", name="Grades", period_key="trimestre_1")
+
+        assert [g["subject"] for g in sensor.extra_state_attributes["grades"]] == ["Subject 4", "Subject 3"]
+
     def test_extra_state_attributes_empty_grades(self):
         coord = _make_coordinator()
         coord.data["grades"] = []

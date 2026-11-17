@@ -171,6 +171,11 @@ async def async_setup_entry(
     async_add_entities(sensors, False)
 
 
+
+def _newest_first(items):
+    """Sort Pronote items by date, most recent first (undated items last)."""
+    return sorted(items, key=lambda item: (getattr(item, "date", None) is not None, getattr(item, "date", None) or 0), reverse=True)
+
 class PronoteGenericSensor(PronoteEntity, SensorEntity):
     """Representation of a Pronote sensor."""
 
@@ -402,7 +407,7 @@ class PronoteGradesSensor(PronotePeriodRelatedSensor):
         grades = []
         limit = int(self.coordinator.config_entry.options.get("grades_to_display", DEFAULT_GRADES_TO_DISPLAY))
         if self._get(self._key) is not None:
-            for grade in self._get(self._key)[:limit]:
+            for grade in _newest_first(self._get(self._key))[:limit]:
                 grades.append(format_grade(grade))
 
         attributes["grades"] = grades
@@ -549,7 +554,7 @@ class PronoteEvaluationsSensor(PronotePeriodRelatedSensor):
         attributes = super().extra_state_attributes
         evaluations = []
         if self._get(self._key) is not None:
-            for evaluation in self._get(self._key)[:EVALUATIONS_TO_DISPLAY]:
+            for evaluation in _newest_first(self._get(self._key))[:EVALUATIONS_TO_DISPLAY]:
                 evaluations.append(format_evaluation(evaluation))
 
         attributes["evaluations"] = evaluations
