@@ -640,7 +640,8 @@ class TestPronoteGradesSensor:
 
     def test_extra_state_attributes_keeps_most_recent_grades(self):
         """With more grades than the limit, the most recent ones are shown first."""
-        from datetime import date as _date, timedelta
+        from datetime import date as _date
+        from datetime import timedelta
 
         grades = []
         for i in range(5):
