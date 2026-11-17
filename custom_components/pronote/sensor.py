@@ -171,10 +171,14 @@ async def async_setup_entry(
     async_add_entities(sensors, False)
 
 
-
 def _newest_first(items):
     """Sort Pronote items by date, most recent first (undated items last)."""
-    return sorted(items, key=lambda item: (getattr(item, "date", None) is not None, getattr(item, "date", None) or 0), reverse=True)
+    return sorted(
+        items,
+        key=lambda item: (getattr(item, "date", None) is not None, getattr(item, "date", None) or 0),
+        reverse=True,
+    )
+
 
 class PronoteGenericSensor(PronoteEntity, SensorEntity):
     """Representation of a Pronote sensor."""
